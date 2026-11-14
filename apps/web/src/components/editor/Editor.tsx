@@ -29,6 +29,9 @@ function Shell() {
   const [exportOpen, setExportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [smallScreenTab, setSmallScreenTab] = useState<"edit" | "media" | "inspector" | "cine">("edit");
+  const [workspace, setWorkspace] = useState<"edit" | "cine" | "effects" | "color" | "audio" | "history">("edit");
+  const [activeTool, setActiveTool] = useState("Media");
+  const [binTab, setBinTab] = useState<"media" | "audio" | "text" | "elements" | "stock">("media");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [timelineHeight, setTimelineHeight] = useState(330);
   const timelineResize = useRef<{ y: number; height: number } | null>(null);
@@ -130,12 +133,22 @@ function Shell() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
-      <TopBar onExport={() => setExportOpen(true)} theme={theme} onToggleTheme={toggleTheme} />
-      <div className="hidden min-h-0 flex-1 xl:grid xl:grid-cols-[180px_240px_minmax(320px,1fr)_330px] 2xl:grid-cols-[220px_300px_minmax(0,1fr)_420px]">
-        <EditorNavigation />
-        <MediaLibrary />
-        <Preview onOpenMedia={() => setSmallScreenTab("media")} />
-        <SidePanel initialTab="cine" />
+      <TopBar onExport={() => setExportOpen(true)} onAI={() => setWorkspace("cine")} theme={theme} onToggleTheme={toggleTheme} />
+      <div className="hidden min-h-0 flex-1 gap-2 bg-bg-deep p-2 xl:grid xl:grid-cols-[190px_270px_minmax(320px,1fr)_350px] 2xl:grid-cols-[210px_300px_minmax(0,1fr)_390px]">
+        <EditorNavigation activeTool={activeTool} onSelect={(tool) => {
+          setActiveTool(tool);
+          if (tool === "AI Assistant") setWorkspace("cine");
+          if (tool === "Media") { setBinTab("media"); setWorkspace("edit"); }
+          if (tool === "Assets") { setBinTab("stock"); setWorkspace("edit"); }
+          if (tool === "Audio") { setBinTab("audio"); setWorkspace("audio"); }
+          if (tool === "Text & Titles") { setBinTab("text"); setWorkspace("edit"); }
+          if (tool === "Transitions") { setBinTab("elements"); setWorkspace("edit"); }
+          if (tool === "Effects") setWorkspace("effects");
+          if (tool === "Color") setWorkspace("color");
+        }} />
+        <div className="min-h-0 overflow-hidden rounded-xl border border-line bg-surface shadow-panel"><MediaLibrary key={binTab} initialTab={binTab} /></div>
+        <div className="min-h-0 overflow-hidden rounded-xl border border-line bg-surface shadow-panel"><Preview onOpenMedia={() => setSmallScreenTab("media")} /></div>
+        <div className="min-h-0 overflow-hidden rounded-xl border border-line bg-surface shadow-panel"><SidePanel key={workspace} initialTab={workspace} /></div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col xl:hidden">
         <nav aria-label="Editor workspace" className="grid h-11 shrink-0 grid-cols-4 border-b border-line bg-surface px-2">
@@ -147,7 +160,7 @@ function Shell() {
           ))}
         </nav>
         <div className="min-h-0 flex-1">
-          {smallScreenTab === "media" ? <MediaLibrary /> : smallScreenTab === "cine" ? <SidePanel initialTab="cine" /> : smallScreenTab === "inspector" ? <SidePanel initialTab="inspector" /> : <Preview onOpenMedia={() => setSmallScreenTab("media")} />}
+          {smallScreenTab === "media" ? <MediaLibrary /> : smallScreenTab === "cine" ? <SidePanel initialTab="cine" /> : smallScreenTab === "inspector" ? <SidePanel initialTab="edit" /> : <Preview onOpenMedia={() => setSmallScreenTab("media")} />}
         </div>
       </div>
       <div className="flex min-h-0 shrink-0 flex-col" style={{ height: timelineHeight, maxHeight: "55dvh" }}>
@@ -184,34 +197,42 @@ function Shell() {
   );
 }
 
-function EditorNavigation() {
+function EditorNavigation({ activeTool, onSelect }: { activeTool: string; onSelect: (tool: string) => void }) {
+  const tools = [["▧", "Templates", false], ["✦", "AI Assistant", true], ["▱", "Assets", true], ["T", "Text & Titles", true], ["✧", "Effects", true], ["◈", "Transitions", true], ["◉", "Color", true], ["♫", "Audio", true], ["⌁", "Motion", false], ["▦", "Graphics", false], ["⌘", "Plugins", false]] as const;
   return (
-    <nav aria-label="Main navigation" className="flex min-h-0 flex-col border-r border-line bg-surface px-3 py-4">
-      <Link href="/" className="mb-6 flex items-center gap-2 px-1" aria-label="CineMind home">
-        <LogoMark size={28} />
-        <span><span className="block text-[13px] font-bold leading-tight">CineMind AI</span><span className="text-[10px] text-muted">Create · Edit · Inspire</span></span>
+    <nav aria-label="Editor tools" className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface px-2.5 py-3 shadow-panel">
+      <Link href="/" className="mb-4 flex items-center gap-2 px-1.5" aria-label="CineMind home">
+        <LogoMark size={30} />
+        <span><span className="block text-[13px] font-bold leading-tight">CineMind <span className="text-accent">AI</span></span><span className="text-[9px] tracking-wide text-muted">CREATIVE STUDIO</span></span>
       </Link>
+      <p className="mb-1.5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Workspace</p>
       <div className="space-y-1">
         <NavLink href="/" label="Home"><span aria-hidden="true">⌂</span></NavLink>
-        <NavLink href="/editor" label="Editor" active><Film size={17} /></NavLink>
-        <NavLink href="/projects" label="Projects"><span aria-hidden="true">▰</span></NavLink>
+        <NavLink href="/editor" label="Edit" active><Film size={16} /></NavLink>
+        <NavLink href="/projects" label="Projects"><span aria-hidden="true">▤</span></NavLink>
       </div>
-      <div className="mt-auto rounded-xl border border-line bg-surface-2 p-3 text-center">
-        <span className="text-accent"><Music size={18} /></span>
-        <p className="mt-1 text-[11px] font-semibold text-soft">Your media stays local</p>
+      <p className="mb-1.5 mt-5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Create & refine</p>
+      <div className="thin-scroll min-h-0 space-y-1 overflow-y-auto">
+        <button type="button" onClick={() => onSelect("Media")} className={`flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${activeTool === "Media" ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><span className="grid w-4 shrink-0 place-items-center text-[14px]">▧</span><span>Media</span></button>
+        {tools.map(([icon, label, available]) => <button key={label} type="button" disabled={!available} onClick={() => onSelect(label)} title={available ? label : `${label} workspace is not implemented yet`} className={`flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-35 ${activeTool === label ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><span className="grid w-4 shrink-0 place-items-center text-[14px] text-soft">{icon}</span><span className="truncate">{label}</span></button>)}
+      </div>
+      <div className="mt-3 rounded-xl border border-accent/20 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.20),rgba(17,18,32,0.6)_72%)] p-3 text-center">
+        <span className="mx-auto grid h-8 w-8 place-items-center rounded-xl bg-accent/15 text-accent"><Music size={16} /></span>
+        <p className="mt-2 text-[11px] font-semibold text-soft">Cine AI copilot</p>
+        <p className="mt-1 text-[9px] leading-relaxed text-muted">Your creative partner, on every cut.</p>
       </div>
     </nav>
   );
 }
 
 function NavLink({ href, label, children, active = false }: { href: string; label: string; children: React.ReactNode; active?: boolean }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} title={label} className={`flex h-10 items-center justify-start gap-3 rounded-lg px-3 text-[12px] font-semibold transition-colors ${active ? "bg-accent/10 text-accent" : "text-muted hover:bg-white/5 hover:text-text"}`}><span className="grid w-5 place-items-center text-base">{children}</span><span>{label}</span></Link>;
+  return <Link href={href} aria-current={active ? "page" : undefined} title={label} className={`flex h-9 items-center justify-start gap-3 rounded-lg px-2.5 text-[11px] font-semibold transition-colors ${active ? "border border-accent/25 bg-gradient-to-r from-accent/20 to-accent/5 text-text shadow-[inset_2px_0_0_var(--accent)]" : "text-muted hover:bg-white/5 hover:text-text"}`}><span className={`grid w-4 place-items-center text-base ${active ? "text-accent" : "text-soft"}`}>{children}</span><span>{label}</span></Link>;
 }
 
-function TopBar({ onExport, theme, onToggleTheme }: { onExport: () => void; theme: "dark" | "light"; onToggleTheme: () => void }) {
+function TopBar({ onExport, onAI, theme, onToggleTheme }: { onExport: () => void; onAI: () => void; theme: "dark" | "light"; onToggleTheme: () => void }) {
   const { title, undo, redo, canUndo, canRedo, doc, saving, projectId } = useEditor();
   return (
-    <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 sm:gap-4 sm:px-4">
+    <header className="relative flex h-[54px] shrink-0 items-center gap-2 border-b border-line bg-surface px-2 sm:gap-4 sm:px-4">
       <div className="tz-stripe absolute inset-x-0 top-0 h-[2px]" />
       <Link href="/projects" className="flex items-center gap-2 xl:hidden" title="All projects">
         <LogoMark size={24} />
@@ -221,6 +242,14 @@ function TopBar({ onExport, theme, onToggleTheme }: { onExport: () => void; them
         <p className="truncate text-[14px] font-semibold leading-tight">{title}</p>
         <p className="text-[11px] leading-tight text-faint">{!projectId ? "Local draft · not synced" : saving ? "Syncing edit…" : `Edit synced · media local · v${doc.version}`}</p>
       </div>
+      <nav aria-label="Studio navigation" className="hidden h-full items-center gap-1 xl:flex">
+        <Link href="/" className="rounded-lg px-3 py-2 text-[11px] font-semibold text-muted transition hover:bg-white/5 hover:text-text">Home</Link>
+        <span className="rounded-lg bg-accent/15 px-3 py-2 text-[11px] font-semibold text-accent">Edit</span>
+        <button disabled title="Video generation is not connected yet" className="cursor-not-allowed rounded-lg px-3 py-2 text-[11px] font-semibold text-muted/40">Generate</button>
+        <button onClick={onAI} className="rounded-lg px-3 py-2 text-[11px] font-semibold text-muted transition hover:bg-white/5 hover:text-text">AI Tools</button>
+        <Link href="/projects" className="rounded-lg px-3 py-2 text-[11px] font-semibold text-muted transition hover:bg-white/5 hover:text-text">Library</Link>
+        <button onClick={onExport} className="rounded-lg px-3 py-2 text-[11px] font-semibold text-muted transition hover:bg-white/5 hover:text-text">Publish</button>
+      </nav>
       <div className="ml-1 flex items-center gap-0.5 sm:ml-4">
         <button title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!canUndo} onClick={undo} className="grid h-8 w-8 place-items-center rounded text-soft hover:bg-white/5 disabled:opacity-30">
           <Undo size={16} />

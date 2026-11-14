@@ -127,15 +127,15 @@ const LOOKS: [NonNullable<ClipEffects["look"]>, string][] = [
   ["bw", "B&W"],
 ];
 
-export function EffectsGroup({ clipId }: { clipId: string }) {
+export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: "all" | "effects" | "color" }) {
   const { doc, run } = useEditor();
   const hit = findClip(doc, clipId);
   if (!hit) return null;
   const fx = hit.clip.fx ?? {};
   const set = (p: Partial<ClipEffects>) => run([{ type: "clip.setEffects", clipId, fx: p }]);
   return (
-    <Group title="Effects">
-      <div className="grid grid-cols-3 gap-1.5">
+    <Group title={mode === "color" ? "Color grading" : mode === "effects" ? "Visual effects" : "Effects & color"}>
+      {mode !== "effects" && <div className="grid grid-cols-3 gap-1.5">
         {LOOKS.map(([k, l]) => (
           <button
             key={k}
@@ -146,14 +146,18 @@ export function EffectsGroup({ clipId }: { clipId: string }) {
             <span className="block py-1">{l}</span>
           </button>
         ))}
-      </div>
-      <Slider label="Brightness" min={-1} max={1} step={0.02} value={fx.brightness ?? 0} fmt={(v) => (v > 0 ? "+" : "") + Math.round(v * 100)} onCommit={(v) => set({ brightness: v })} />
-      <Slider label="Contrast" min={0} max={2} step={0.02} value={fx.contrast ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ contrast: v })} />
-      <Slider label="Saturation" min={0} max={3} step={0.02} value={fx.saturation ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ saturation: v })} />
-      <Slider label="Blur" min={0} max={20} step={0.5} value={fx.blur ?? 0} fmt={(v) => `${v} px`} onCommit={(v) => set({ blur: v })} />
-      <Slider label="Sharpen" min={0} max={5} step={0.1} value={fx.sharpen ?? 0} fmt={(v) => v.toFixed(1)} onCommit={(v) => set({ sharpen: v })} />
-      <Slider label="Vignette" min={0} max={1} step={0.01} value={fx.vignette ?? 0} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ vignette: v })} />
-      <ActionBtn label="Reset effects" onClick={() => set({ look: "none", brightness: 0, contrast: 1, saturation: 1, blur: 0, sharpen: 0, vignette: 0 })} />
+      </div>}
+      {mode !== "effects" && <>
+        <Slider label="Brightness" min={-1} max={1} step={0.02} value={fx.brightness ?? 0} fmt={(v) => (v > 0 ? "+" : "") + Math.round(v * 100)} onCommit={(v) => set({ brightness: v })} />
+        <Slider label="Contrast" min={0} max={2} step={0.02} value={fx.contrast ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ contrast: v })} />
+        <Slider label="Saturation" min={0} max={3} step={0.02} value={fx.saturation ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ saturation: v })} />
+      </>}
+      {mode !== "color" && <>
+        <Slider label="Blur" min={0} max={20} step={0.5} value={fx.blur ?? 0} fmt={(v) => `${v} px`} onCommit={(v) => set({ blur: v })} />
+        <Slider label="Sharpen" min={0} max={5} step={0.1} value={fx.sharpen ?? 0} fmt={(v) => v.toFixed(1)} onCommit={(v) => set({ sharpen: v })} />
+        <Slider label="Vignette" min={0} max={1} step={0.01} value={fx.vignette ?? 0} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ vignette: v })} />
+      </>}
+      <ActionBtn label={mode === "color" ? "Reset color" : mode === "effects" ? "Reset effects" : "Reset effects & color"} onClick={() => set(mode === "color" ? { look: "none", brightness: 0, contrast: 1, saturation: 1 } : mode === "effects" ? { blur: 0, sharpen: 0, vignette: 0 } : { look: "none", brightness: 0, contrast: 1, saturation: 1, blur: 0, sharpen: 0, vignette: 0 })} />
     </Group>
   );
 }

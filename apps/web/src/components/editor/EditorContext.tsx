@@ -53,7 +53,7 @@ interface EditorState {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  importFiles: (files: FileList | File[]) => void;
+  importFiles: (files: FileList | File[], assetImportJobId?: string) => void;
   relink: (assetId: string, file: File) => Promise<void>;
   getLocalFile: (assetId: string) => Promise<File | null>;
   toasts: Toast[];
@@ -319,7 +319,7 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
   );
 
   const importToDevice = useCallback(
-    async (file: File) => {
+    async (file: File, assetImportJobId?: string) => {
       if (!projectId) return;
       const tempId = `imp_${++toastSeq}`;
       const kind = kindOf(file)!;
@@ -338,8 +338,10 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
           width: probe.width,
           height: probe.height,
           hasAudio: probe.kind !== "image",
+          ...(assetImportJobId ? { assetImportJobId } : {}),
         });
         await saveLocal(projectId, a.id, file);
+        if (assetImportJobId) await api("POST", `/projects/${projectId}/creative-assets/imports/${assetImportJobId}/device-complete`);
         const protectedStorage = await requestPersistence();
         if (!protectedStorage) notify("info", "Media stayed on this device, but the browser could not guarantee it will survive storage cleanup. Keep your original files backed up.");
         const local = await loadLocal(projectId, a.id);
@@ -350,6 +352,7 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
       } catch (e) {
         setUploads((u) => u.filter((x) => x.id !== tempId));
         const error = e as Error;
+        if (assetImportJobId) void api("POST", `/projects/${projectId}/creative-assets/imports/${assetImportJobId}/device-failure`, { message: error.message }).catch(() => {});
         notify("error", error.name === "QuotaExceededError" ? `${file.name}: device storage is full. Free space and try again.` : `${file.name}: ${error.message}`);
       }
     },
@@ -405,7 +408,11 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
 
   // ---- Import ----
   const importFiles = useCallback(
-    (files: FileList | File[]) => {
+    (files: FileList | File[], assetImportJobId?: string) => {
+      if (assetImportJobId && files.length !== 1) {
+        notify("error", "Import one stock asset at a time.");
+        return;
+      }
       for (const file of Array.from(files)) {
         const kind = file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : file.type.startsWith("image/") ? "image" : null;
         if (!kind) {
@@ -413,7 +420,7 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
           continue;
         }
         if (projectId) {
-          void importToDevice(file);
+          void importToDevice(file, assetImportJobId);
           continue;
         }
         // Demo mode: play straight from this device.

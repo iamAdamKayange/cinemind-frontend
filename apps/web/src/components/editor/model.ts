@@ -1,7 +1,7 @@
 import type { AssetInfo, TimelineDocument } from "@cinemind/timeline-engine";
 import type { Photo } from "@/lib/photos";
 import { PHOTOS } from "@/lib/photos";
-import type { RemoteAsset } from "@/lib/api";
+import type { AssetProvenance, RemoteAsset } from "@/lib/api";
 
 export const FPS = 30;
 
@@ -25,6 +25,7 @@ export interface EditorAsset extends AssetInfo {
   width?: number | null;
   height?: number | null;
   local?: boolean;
+  provenance?: AssetProvenance | null;
 }
 
 export const SAMPLE_ASSETS: EditorAsset[] = [
@@ -53,6 +54,7 @@ export function fromRemote(a: RemoteAsset): EditorAsset {
     height: a.height,
     thumbUrl: a.thumbUrl,
     status: a.status,
+    provenance: a.provenance ?? null,
     sizeLabel: `${a.width && a.height ? `${a.width}×${a.height} · ` : ""}${(a.sizeBytes / 1e6).toFixed(1)} MB`,
     bpm: a.analysis?.bpm ?? null,
     beats: a.analysis?.beats,

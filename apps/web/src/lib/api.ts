@@ -95,7 +95,21 @@ export interface RemoteAsset {
   url: string | null;
   proxyUrl: string | null;
   thumbUrl: string | null;
+  provenance: AssetProvenance | null;
   analysis: { bpm: number | null; beats: number[]; peaks: number[]; peaksPerSecond: number; sceneCount: number } | null;
+}
+
+export interface AssetProvenance {
+  provider: string;
+  externalAssetId: string;
+  sourceUrl: string;
+  creator: string | null;
+  licenseId: string;
+  licenseUrl: string;
+  commercialUse: boolean;
+  attributionRequired: boolean;
+  attributionText: string | null;
+  approvalStatus: "pending" | "approved" | "rejected" | "not_required";
 }
 
 export interface TimelineState {

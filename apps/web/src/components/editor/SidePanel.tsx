@@ -47,21 +47,23 @@ const SOCIAL_STARTERS = [
 
 let seq = 0;
 
-export function SidePanel({ initialTab = "inspector" }: { initialTab?: "cine" | "inspector" | "history" }) {
-  const [tab, setTab] = useState<"cine" | "inspector" | "history">(initialTab);
+type PanelTab = "edit" | "effects" | "color" | "audio" | "cine" | "history";
+
+export function SidePanel({ initialTab = "edit" }: { initialTab?: PanelTab }) {
+  const [tab, setTab] = useState<PanelTab>(initialTab);
   const { projectId } = useEditor();
 
   return (
     <aside className="flex min-h-0 flex-col border-l border-line bg-surface">
-      <div className="flex h-9 shrink-0 items-end gap-5 border-b border-line px-4 text-[12px]">
-        {(projectId ? (["inspector", "cine", "history"] as const) : (["inspector", "cine"] as const)).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`relative pb-2 font-semibold ${tab === t ? "text-accent" : "text-muted hover:text-soft"}`}>
-            {t === "cine" ? "Cine · AI copilot" : t === "inspector" ? "Inspector" : "History"}
+      <div className="thin-scroll flex h-11 shrink-0 items-end gap-4 overflow-x-auto border-b border-line px-3 text-[11px]">
+        {(["edit", "effects", "color", "audio", "cine", ...(projectId ? ["history" as const] : [])] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`relative shrink-0 pb-2.5 font-semibold ${tab === t ? "text-accent" : "text-muted hover:text-soft"}`}>
+            {t === "cine" ? "Cine AI" : t === "edit" ? "Edit" : t === "effects" ? "Effects" : t === "color" ? "Color" : t === "audio" ? "Audio" : "History"}
             {tab === t && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" />}
           </button>
         ))}
       </div>
-      {tab === "cine" ? <Copilot /> : tab === "inspector" ? <Inspector /> : <VersionHistory />}
+      {tab === "cine" ? <Copilot /> : tab === "history" ? <VersionHistory /> : tab === "edit" || tab === "effects" || tab === "color" || tab === "audio" ? <Inspector section={tab} /> : null}
     </aside>
   );
 }
@@ -344,12 +346,12 @@ function StatusPill({ status }: { status: NonNullable<Extract<Msg, { role: "cine
   return <span className={`rounded px-1.5 py-0.5 capitalize ${map[status]}`}>{status}</span>;
 }
 
-function Inspector() {
+function Inspector({ section }: { section: "edit" | "effects" | "color" | "audio" }) {
   const { doc, selectedId, run, assetById, playhead, select } = useEditor();
   const hit = selectedId ? findClip(doc, selectedId) : null;
 
   if (!hit) {
-    return <div className="grid flex-1 place-items-center p-8 text-center text-[13px] text-faint">Select a clip on the timeline to see its properties.</div>;
+    return <div className="grid flex-1 place-items-center p-8 text-center"><div><span className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-accent/20 bg-accent/10 text-accent">{section === "audio" ? "♫" : section === "color" ? "◉" : section === "effects" ? "✧" : "◈"}</span><p className="mt-3 text-[13px] font-semibold text-soft">Select a timeline clip</p><p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-faint">{section === "audio" ? "Choose an audio or video clip to adjust its sound." : section === "color" ? "Choose a video clip to grade its color and look." : section === "effects" ? "Choose a video clip to add and tune visual effects." : "Select a clip to see its editing controls."}</p></div></div>;
   }
   const { clip, track } = hit;
   const asset = clip.assetId ? assetById.get(clip.assetId) : null;
@@ -357,7 +359,7 @@ function Inspector() {
 
   return (
     <div className="thin-scroll min-h-0 flex-1 space-y-6 overflow-y-auto p-4 text-[13px]">
-      <div>
+      {section === "edit" && <div>
         <p className="text-[11px] text-muted">{track.kind === "text" ? "Title" : asset?.kind ?? "Clip"} · {track.name}</p>
         <p className="mt-1 text-[16px] text-text">{clip.label ?? clip.text}</p>
         {track.locked && <p className="mt-1 text-[11px] text-danger">Track is locked</p>}
@@ -383,17 +385,17 @@ function Inspector() {
             }}
           />
         </div>
-      </div>
+      </div>}
 
-      {track.kind === "text" && (
+      {section === "edit" && track.kind === "text" && (
         <Group title="Text">
           <TextField value={clip.text ?? ""} onCommit={(v) => run([{ type: "title.update", clipId: clip.id, text: v }])} />
         </Group>
       )}
 
-      {track.kind === "video" && <TransitionsGroup clipId={clip.id} />}
+      {section === "edit" && track.kind === "video" && <TransitionsGroup clipId={clip.id} />}
 
-      <Group title="Timing">
+      {section === "edit" && <Group title="Timing">
         <Row label="Start">{framesToTimecode(clip.timelineStartFrames, FPS)}</Row>
         <Row label="Duration">{sec(clipDuration(clip))}s</Row>
         {track.kind !== "text" && (
@@ -420,13 +422,14 @@ function Inspector() {
             onCommit={(v) => run([{ type: "clip.trim", clipId: clip.id, sourceInFrames: 0, sourceOutFrames: Math.round(v * FPS) }])}
           />
         )}
-      </Group>
+      </Group>}
 
-      {track.kind !== "audio" && <FrameGroup clipId={clip.id} />}
-      {track.kind !== "audio" && <EffectsGroup clipId={clip.id} />}
-      {(track.kind === "audio" || asset?.kind === "video") && <SoundGroup clipId={clip.id} />}
+      {section === "edit" && track.kind !== "audio" && <FrameGroup clipId={clip.id} />}
+      {section === "effects" && track.kind !== "audio" && <EffectsGroup clipId={clip.id} mode="effects" />}
+      {section === "color" && track.kind !== "audio" && <EffectsGroup clipId={clip.id} mode="color" />}
+      {section === "audio" && (track.kind === "audio" || asset?.kind === "video") && <SoundGroup clipId={clip.id} />}
 
-      {track.kind === "audio" && (
+      {section === "audio" && track.kind === "audio" && (
         <Group title="Levels">
           <Slider label="Gain" min={-30} max={12} step={0.5} value={clip.gainDb ?? 0} fmt={(v) => `${v > 0 ? "+" : ""}${v.toFixed(1)} dB`} onCommit={(v) => run([{ type: "audio.setGain", clipId: clip.id, gainDb: v }])} />
           <NumField label="Fade in (s)" value={Number(sec(clip.fadeInFrames ?? 0))} step={0.1} onCommit={(v) => run([{ type: "audio.setFades", clipId: clip.id, fadeInFrames: Math.round(v * FPS), fadeOutFrames: clip.fadeOutFrames ?? 0 }])} />
@@ -434,7 +437,7 @@ function Inspector() {
         </Group>
       )}
 
-      {asset && (
+      {section === "edit" && asset && (
         <Group title="Source media">
           <Row label="File">{asset.name}</Row>
           <Row label="Length">{sec(asset.durationFrames)}s</Row>
