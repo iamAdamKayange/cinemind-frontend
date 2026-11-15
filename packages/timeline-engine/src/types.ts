@@ -41,6 +41,10 @@ export interface TransformKeyframe {
 /** Per-clip effects. Visual ones apply to video/image/title clips, audio ones to anything with sound. */
 export interface ClipEffects {
   look?: "none" | "bw" | "vintage" | "warm" | "cool" | "cinematic";
+  /** Built-in CineMind image effects. These are generated procedurally, not third-party asset files. */
+  visualPreset?: "none" | "film-grain" | "vhs" | "negative" | "sepia" | "high-contrast" | "night-vision";
+  /** Strength of the selected visual preset, 0..1. */
+  visualIntensity?: number;
   /** -1..1 */
   brightness?: number;
   /** 0..2 (1 = unchanged) */

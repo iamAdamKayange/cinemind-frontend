@@ -135,6 +135,16 @@ const LOOK_SWATCHES: Record<NonNullable<ClipEffects["look"]>, string> = {
   bw: "linear-gradient(115deg,#111 0%,#454545 42%,#aaa 76%,#eee 100%)",
 };
 
+const VISUAL_PRESETS: { id: NonNullable<ClipEffects["visualPreset"]>; name: string; note: string; swatch: string }[] = [
+  { id: "none", name: "None", note: "Clean source", swatch: "linear-gradient(135deg,#172b3d,#9ac5c9 48%,#efad68)" },
+  { id: "film-grain", name: "Film grain", note: "Organic texture", swatch: "radial-gradient(#fff8 0.5px,transparent .8px),linear-gradient(135deg,#403344,#b3815c)", },
+  { id: "vhs", name: "VHS", note: "Tape texture", swatch: "repeating-linear-gradient(0deg,#ffffff18 0 1px,transparent 1px 4px),linear-gradient(120deg,#172b5a,#be4d79)" },
+  { id: "negative", name: "Negative", note: "Invert colors", swatch: "linear-gradient(135deg,#ffe1ac,#7188ff 48%,#1b2032)" },
+  { id: "sepia", name: "Sepia", note: "Warm archive", swatch: "linear-gradient(135deg,#35221a,#aa7148 50%,#e5c392)" },
+  { id: "high-contrast", name: "Punch", note: "Deep contrast", swatch: "linear-gradient(135deg,#080b18,#34395b 48%,#f4e4b3)" },
+  { id: "night-vision", name: "Night vision", note: "Green monochrome", swatch: "linear-gradient(135deg,#061a12,#19a56b 55%,#bdff9b)" },
+];
+
 export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: "all" | "effects" | "color" }) {
   const { doc, run } = useEditor();
   const hit = findClip(doc, clipId);
@@ -161,11 +171,23 @@ export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: 
         <Slider label="Saturation" min={0} max={3} step={0.02} value={fx.saturation ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ saturation: v })} />
       </>}
       {mode !== "color" && <>
+        <div className="grid grid-cols-2 gap-1.5">
+          {VISUAL_PRESETS.map((preset) => {
+            const active = (fx.visualPreset ?? "none") === preset.id;
+            return <button key={preset.id} type="button" aria-pressed={active} onClick={() => set({ visualPreset: preset.id, visualIntensity: preset.id === "none" ? 0 : fx.visualIntensity ?? 0.6 })} className={`overflow-hidden rounded-lg border text-left transition ${active ? "border-accent ring-1 ring-accent/30" : "border-line hover:border-line-strong"}`}>
+              <span className="block h-8" style={{ background: preset.swatch, backgroundSize: preset.id === "film-grain" ? "3px 3px,auto" : undefined }} />
+              <span className="block px-2 py-1.5"><span className="block text-[10px] font-semibold text-soft">{preset.name}</span><span className="block text-[9px] text-faint">{preset.note}</span></span>
+            </button>;
+          })}
+        </div>
+        {fx.visualPreset && fx.visualPreset !== "none" && <Slider label="Effect strength" min={0} max={1} step={0.01} value={fx.visualIntensity ?? 0.6} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ visualIntensity: v })} />}
+      </>}
+      {mode !== "color" && <>
         <Slider label="Blur" min={0} max={20} step={0.5} value={fx.blur ?? 0} fmt={(v) => `${v} px`} onCommit={(v) => set({ blur: v })} />
         <Slider label="Sharpen" min={0} max={5} step={0.1} value={fx.sharpen ?? 0} fmt={(v) => v.toFixed(1)} onCommit={(v) => set({ sharpen: v })} />
         <Slider label="Vignette" min={0} max={1} step={0.01} value={fx.vignette ?? 0} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ vignette: v })} />
       </>}
-      <ActionBtn label={mode === "color" ? "Reset color" : mode === "effects" ? "Reset effects" : "Reset effects & color"} onClick={() => set(mode === "color" ? { look: "none", brightness: 0, contrast: 1, saturation: 1 } : mode === "effects" ? { blur: 0, sharpen: 0, vignette: 0 } : { look: "none", brightness: 0, contrast: 1, saturation: 1, blur: 0, sharpen: 0, vignette: 0 })} />
+      <ActionBtn label={mode === "color" ? "Reset color" : mode === "effects" ? "Reset effects" : "Reset effects & color"} onClick={() => set(mode === "color" ? { look: "none", brightness: 0, contrast: 1, saturation: 1 } : mode === "effects" ? { blur: 0, sharpen: 0, vignette: 0, visualPreset: "none", visualIntensity: 0 } : { look: "none", brightness: 0, contrast: 1, saturation: 1, blur: 0, sharpen: 0, vignette: 0, visualPreset: "none", visualIntensity: 0 })} />
     </Group>
   );
 }
@@ -272,5 +294,11 @@ export function cssFx(fx: ClipEffects | undefined): string {
   if (fx.saturation !== undefined && fx.saturation !== 1) parts.push(`saturate(${fx.saturation})`);
   if (fx.blur) parts.push(`blur(${fx.blur * 0.4}px)`);
   if (fx.sharpen) parts.push(`contrast(${1 + fx.sharpen * 0.035})`);
+  const strength = Math.max(0, Math.min(1, fx.visualIntensity ?? 0.6));
+  if (fx.visualPreset === "vhs") parts.push(`contrast(${1 + strength * 0.2})`, `saturate(${1 - strength * 0.35})`, `hue-rotate(${strength * -8}deg)`);
+  if (fx.visualPreset === "negative") parts.push("invert(1)");
+  if (fx.visualPreset === "sepia") parts.push(`sepia(${strength})`);
+  if (fx.visualPreset === "high-contrast") parts.push(`contrast(${1 + strength * 0.65})`);
+  if (fx.visualPreset === "night-vision") parts.push(`grayscale(${strength * 0.65})`, `sepia(${strength})`, `hue-rotate(${strength * 65}deg)`, `saturate(${1 + strength * 3})`);
   return parts.filter(Boolean).join(" ");
 }

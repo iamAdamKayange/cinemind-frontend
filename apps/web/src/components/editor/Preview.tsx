@@ -70,6 +70,8 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
     }
     return 0;
   }, [doc, playhead]);
+  const visualPreset = videoClip?.clip.fx?.visualPreset;
+  const visualIntensity = Math.max(0, Math.min(1, videoClip?.clip.fx?.visualIntensity ?? 0.6));
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-bg-deep">
@@ -92,6 +94,8 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
             )}
             {videoClip && !asset?.url && asset?.photo && <Photo photo={asset.photo} sizes="60vw" className="scale-105" />}
           </div>
+          {visualPreset === "film-grain" && <div aria-hidden="true" className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ opacity: visualIntensity * 0.48, backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E\")", backgroundSize: "180px 180px" }} />}
+          {visualPreset === "vhs" && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ opacity: visualIntensity * 0.55, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.55) 4px, transparent 5px)" }} />}
           {videoClip && (playbackError || (asset && !asset.url && !asset.photo) || !asset) && <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#090a11]/95 px-5 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl border border-sun/25 bg-sun/10 text-sun"><Film size={19} /></span>
             <p className="text-[13px] font-semibold text-text">{playbackError ? "This video could not be decoded" : "The original media is offline"}</p>

@@ -198,6 +198,13 @@ export function videoFx(fx: ClipEffects | undefined): string[] {
   if (fx.blur && fx.blur > 0) out.push(`gblur=sigma=${n3(fx.blur)}`);
   if (fx.sharpen && fx.sharpen > 0) out.push(`unsharp=5:5:${n3(fx.sharpen)}:5:5:0`);
   if (fx.vignette && fx.vignette > 0) out.push(`vignette=angle=${n3((0.25 + fx.vignette * 0.55) * Math.PI)}`);
+  const strength = Math.max(0, Math.min(1, fx.visualIntensity ?? 0.6));
+  if (fx.visualPreset === "film-grain") out.push(`noise=alls=${n3(strength * 28)}:allf=t+u`);
+  if (fx.visualPreset === "vhs") out.push(`eq=contrast=${n3(1 + strength * 0.2)}:saturation=${n3(1 - strength * 0.35)}`, `noise=alls=${n3(strength * 16)}:allf=t`, "drawgrid=w=iw:h=4:t=1:c=black@0.22");
+  if (fx.visualPreset === "negative") out.push("negate");
+  if (fx.visualPreset === "sepia") out.push("colorchannelmixer=rr=.393:rg=.769:rb=.189:gr=.349:gg=.686:gb=.168:br=.272:bg=.534:bb=.131");
+  if (fx.visualPreset === "high-contrast") out.push(`eq=contrast=${n3(1 + strength * 0.65)}`);
+  if (fx.visualPreset === "night-vision") out.push(`hue=s=${n3(1 - strength * 0.65)}`, `colorbalance=gs=${n3(strength * 0.28)}:gm=${n3(strength * 0.38)}:gh=${n3(strength * 0.15)}:bs=${n3(-strength * 0.3)}`);
   return out;
 }
 
