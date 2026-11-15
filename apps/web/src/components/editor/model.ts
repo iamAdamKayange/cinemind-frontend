@@ -14,7 +14,7 @@ export interface EditorAsset extends AssetInfo {
   photo?: Photo;
   sizeLabel?: string;
   status?: RemoteAsset["status"] | "uploading" | "offline";
-  location?: "device" | "cloud";
+  location?: "device" | "server" | "cloud";
   fingerprint?: string | null;
   hasAudio?: boolean;
   progress?: number;
@@ -45,8 +45,8 @@ export function fromRemote(a: RemoteAsset): EditorAsset {
     kind: a.kind,
     name: a.name,
     durationFrames: a.durationFrames ?? 0,
-    // Remote URLs are intentionally never used for media playback or export. Relink from this device.
-    url: undefined,
+    // Signed server links stream project media; device-only media still needs relinking on this device.
+    url: a.location === "server" || a.location === "cloud" ? a.proxyUrl ?? a.url ?? undefined : undefined,
     location: a.location,
     fingerprint: a.fingerprint,
     hasAudio: a.hasAudio,

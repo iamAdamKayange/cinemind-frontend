@@ -90,7 +90,7 @@ export interface RemoteAsset {
   height: number | null;
   hasAudio: boolean;
   status: "uploaded" | "processing" | "analyzing" | "ready" | "failed";
-  location: "device" | "cloud";
+  location: "device" | "server" | "cloud";
   fingerprint: string | null;
   url: string | null;
   proxyUrl: string | null;

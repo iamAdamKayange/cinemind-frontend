@@ -133,6 +133,7 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
       return Promise.all(
         items.map(async (r) => {
           const a = fromRemote(r);
+          if (r.location === "server" || r.location === "cloud") return a;
           const [file, thumb] = await Promise.all([loadLocal(projectId, r.id), loadLocal(projectId, `${r.id}.thumb.jpg`)]);
           if (!file) return { ...a, url: undefined, status: "offline" as const };
           return { ...a, location: "device" as const, url: URL.createObjectURL(file), thumbUrl: thumb ? URL.createObjectURL(thumb) : r.kind === "image" ? URL.createObjectURL(file) : null, sizeLabel: `${a.sizeLabel} · this device` };
@@ -300,7 +301,8 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
       const video = kind === "video" ? await analyzeVideoLocal(file, durationSec) : null;
       let thumbUrl: string | null = null;
       if (video?.thumb) {
-        await saveLocal(projectId, `${assetId}.thumb.jpg`, video.thumb);
+        const current = assetsRef.current.find((asset) => asset.id === assetId);
+        if (current?.location === "device") await saveLocal(projectId, `${assetId}.thumb.jpg`, video.thumb);
         thumbUrl = URL.createObjectURL(video.thumb);
       } else if (kind === "image") thumbUrl = URL.createObjectURL(file);
       await api("PUT", `/projects/${projectId}/media/${assetId}/analysis`, { audio, scenes: video?.scenes ?? null }).catch(() => {});
@@ -328,26 +330,37 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
         const probe = await probeLocal(file);
         const fp = await fingerprint(file);
         setUploads((u) => u.map((x) => (x.id === tempId ? { ...x, progress: 60 } : x)));
-        const a = await api<RemoteAsset>("POST", `/projects/${projectId}/media/register`, {
-          name: file.name,
-          kind: probe.kind,
-          mimeType: file.type,
-          sizeBytes: file.size,
-          fingerprint: fp,
-          durationFrames: Math.max(1, Math.round(probe.durationSec * FPS)),
-          width: probe.width,
-          height: probe.height,
-          hasAudio: probe.kind !== "image",
-          ...(assetImportJobId ? { assetImportJobId } : {}),
-        });
-        await saveLocal(projectId, a.id, file);
+        const storageMode = await api<{ mode: "device" | "server" }>("GET", `/projects/${projectId}/media/storage`).catch(() => ({ mode: "device" as const }));
+        let a: RemoteAsset;
+        if (storageMode.mode === "server" && !assetImportJobId) {
+          const form = new FormData();
+          form.append("file", file, file.name);
+          a = await api<RemoteAsset>("POST", `/projects/${projectId}/media`, form);
+        } else {
+          a = await api<RemoteAsset>("POST", `/projects/${projectId}/media/register`, {
+            name: file.name,
+            kind: probe.kind,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            fingerprint: fp,
+            durationFrames: Math.max(1, Math.round(probe.durationSec * FPS)),
+            width: probe.width,
+            height: probe.height,
+            hasAudio: probe.kind !== "image",
+            ...(assetImportJobId ? { assetImportJobId } : {}),
+          });
+          await saveLocal(projectId, a.id, file);
+        }
         if (assetImportJobId) await api("POST", `/projects/${projectId}/creative-assets/imports/${assetImportJobId}/device-complete`);
-        const protectedStorage = await requestPersistence();
-        if (!protectedStorage) notify("info", "Media stayed on this device, but the browser could not guarantee it will survive storage cleanup. Keep your original files backed up.");
-        const local = await loadLocal(projectId, a.id);
+        if (a.location === "device") {
+          const protectedStorage = await requestPersistence();
+          if (!protectedStorage) notify("info", "Media stayed on this device, but the browser could not guarantee it will survive storage cleanup. Keep your original files backed up.");
+        }
+        const local = a.location === "device" ? await loadLocal(projectId, a.id) : file;
         setUploads((u) => u.filter((x) => x.id !== tempId));
-        setAssets((xs) => [{ ...fromRemote(a), location: "device", url: URL.createObjectURL(local ?? file), status: "analyzing", sizeLabel: `${(file.size / 1e6).toFixed(1)} MB · this device` }, ...xs.filter((x) => x.id !== a.id)]);
-        notify("ok", `Added ${file.name} — stored on this device`);
+        const editorAsset = fromRemote(a);
+        setAssets((xs) => [{ ...editorAsset, ...(a.location === "device" ? { url: URL.createObjectURL(local ?? file), location: "device" as const, sizeLabel: `${(file.size / 1e6).toFixed(1)} MB · this device` } : { location: "server" as const, sizeLabel: `${(file.size / 1e6).toFixed(1)} MB · server storage` }), status: "analyzing" }, ...xs.filter((x) => x.id !== a.id)]);
+        notify("ok", a.location === "server" ? `Added ${file.name} — stored in this project` : `Added ${file.name} — stored on this device`);
         await analyseOnDevice(a.id, local ?? file, probe.kind, probe.durationSec);
       } catch (e) {
         setUploads((u) => u.filter((x) => x.id !== tempId));
@@ -404,7 +417,16 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
     })();
   }, [loading, projectId, analyseOnDevice]);
 
-  const getLocalFile = useCallback(async (assetId: string) => (projectId ? loadLocal(projectId, assetId) : null), [projectId]);
+  const getLocalFile = useCallback(async (assetId: string) => {
+    if (!projectId) return null;
+    const asset = assetsRef.current.find((item) => item.id === assetId);
+    if ((asset?.location === "server" || asset?.location === "cloud") && asset.url) {
+      const response = await fetch(asset.url);
+      if (!response.ok) throw new Error("Could not download this server-stored media for local export. Reopen the project and retry.");
+      return new File([await response.blob()], asset.name, { type: asset.kind === "video" ? "video/mp4" : asset.kind === "audio" ? "audio/mpeg" : "image/jpeg" });
+    }
+    return loadLocal(projectId, assetId);
+  }, [projectId]);
 
   // ---- Import ----
   const importFiles = useCallback(

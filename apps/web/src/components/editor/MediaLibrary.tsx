@@ -1,7 +1,7 @@
 "use client";
 
 import { clipEnd } from "@cinemind/timeline-engine";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Photo } from "@/components/visual/Photo";
 import { Film, Music, Plus, TextIcon, Upload } from "@/components/ui/icons";
 import { API_URL, api, getToken } from "@/lib/api";
@@ -29,7 +29,17 @@ export function MediaLibrary({ initialTab = "media" }: { initialTab?: Tab }) {
   const [query, setQuery] = useState("");
   const [over, setOver] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<{ mode: "device" | "server"; userUsedBytes: number; userQuotaBytes: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let active = true;
+    api<{ mode: "device" | "server"; userUsedBytes?: number; userQuotaBytes?: number }>("GET", `/projects/${projectId}/media/storage`)
+      .then((info) => { if (active) setStorageInfo({ mode: info.mode, userUsedBytes: info.userUsedBytes ?? 0, userQuotaBytes: info.userQuotaBytes ?? 0 }); })
+      .catch(() => { if (active) setStorageInfo({ mode: "device", userUsedBytes: 0, userQuotaBytes: 0 }); });
+    return () => { active = false; };
+  }, [projectId, assets.length]);
 
   const shown = assets.filter((a) => (tab === "audio" ? a.kind === "audio" : tab === "media" ? a.kind !== "audio" : false) && a.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -102,6 +112,11 @@ export function MediaLibrary({ initialTab = "media" }: { initialTab?: Tab }) {
         {([ ["media", "Media"], ["audio", "Audio"], ["text", "Text"], ["elements", "Effects"], ["stock", "Stock"] ] as const).map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-md py-2 text-[10px] font-semibold transition ${tab === id ? "bg-accent/10 text-accent" : "text-muted hover:bg-white/5 hover:text-text"}`}>{label}</button>)}
       </div>
       <div className="space-y-3 p-3">
+        {storageInfo?.mode === "server" && storageInfo.userQuotaBytes > 0 && (tab === "media" || tab === "audio") && <div className="rounded-lg border border-line bg-bg-deep/70 px-2.5 py-2" aria-label="Project media storage usage">
+          <div className="flex items-center justify-between gap-2 text-[10px]"><span className="font-semibold text-soft">Account storage</span><span className="text-faint">{(storageInfo.userUsedBytes / 1e9).toFixed(1)} / {(storageInfo.userQuotaBytes / 1e9).toFixed(0)} GB</span></div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${Math.min(100, (storageInfo.userUsedBytes / storageInfo.userQuotaBytes) * 100)}%` }} /></div>
+          <p className="mt-1 text-[9px] text-faint">Media is saved to this project’s Hetzner storage.</p>
+        </div>}
         {(tab === "media" || tab === "audio") && <button onClick={() => fileRef.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-line-strong py-3 text-[13px] font-semibold text-soft transition-colors hover:border-accent/60 hover:text-accent"><Upload size={15} /> {tab === "audio" ? "Import audio" : "Import video or image"}</button>}
         {(tab === "media" || tab === "audio") && <button onClick={() => setRecording(true)} className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-line py-2 text-[12px] font-semibold text-soft transition-colors hover:border-danger/60 hover:text-danger"><span className="h-2.5 w-2.5 rounded-full bg-danger" /> Record voice-over</button>}
         {recording && <VoiceRecorder onClose={() => setRecording(false)} onDone={(f) => importFiles([f])} />}

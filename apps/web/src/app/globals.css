@@ -90,6 +90,87 @@
   --font-mono: var(--font-code);
 }
 
+/* The editor uses the CineMind studio palette from the supplied production UI references.
+   Other product pages keep the Bahari usiku site palette above. */
+.cine-editor {
+  --bg: #070811;
+  --bg-deep: #05060d;
+  --surface: #0d0f1a;
+  --surface-2: #121525;
+  --surface-3: #191c30;
+  --line: rgba(169, 176, 226, 0.11);
+  --line-strong: rgba(169, 176, 226, 0.2);
+  --text: #f5f4ff;
+  --text-soft: #d2d2e5;
+  --muted: #9294b1;
+  --faint: #666a86;
+  --accent: #a77bff;
+  --accent-strong: #713cf0;
+  --accent-ink: #fff;
+  --green: #18c68a;
+  --green-text: #36dca1;
+  --teal: #21c8e8;
+  --violet: #a77bff;
+  --rose: #ff718f;
+  --clip-video: #145d7d;
+  --clip-audio: #087e82;
+  --clip-text: #683ac2;
+  --danger: #ff6678;
+  --ok: #36dca1;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+:root[data-theme="light"] .cine-editor {
+  --bg: #f2f1f8;
+  --bg-deep: #e8e7f1;
+  --surface: #fbfaff;
+  --surface-2: #f2f0fa;
+  --surface-3: #e8e4f5;
+  --line: rgba(54, 43, 91, 0.12);
+  --line-strong: rgba(54, 43, 91, 0.2);
+  --text: #1c1830;
+  --text-soft: #393451;
+  --muted: #625d7d;
+  --faint: #827d9b;
+  --accent: #7140d8;
+  --accent-strong: #6332d0;
+  --accent-ink: #fff;
+  --green-text: #087a58;
+  --teal: #087b9e;
+  --violet: #7140d8;
+  --clip-video: #2784a4;
+  --clip-audio: #299b91;
+  --clip-text: #8a62d2;
+  --danger: #bc344f;
+  --ok: #087a58;
+}
+
+.cine-editor .btn-primary {
+  color: #fff;
+  border: 1px solid rgba(196, 160, 255, 0.2);
+  border-radius: 10px;
+  background: linear-gradient(115deg, #8e4df6, #6636e5 58%, #4f4be7);
+  box-shadow: 0 8px 24px -12px rgba(124, 75, 239, 0.82);
+}
+.cine-editor .btn-primary:hover {
+  filter: brightness(1.12);
+  box-shadow: 0 12px 30px -12px rgba(124, 75, 239, 0.8);
+}
+.cine-editor .tz-stripe {
+  background: linear-gradient(90deg, #8b5cf6, #c05aff 52%, #30bff2);
+}
+.cine-editor :is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cine-editor ::selection {
+  background: rgba(167, 123, 255, 0.42);
+  color: var(--text);
+}
+
 html {
   background: var(--bg);
   color-scheme: dark;

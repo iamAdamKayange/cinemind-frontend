@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LogoMark } from "@/components/brand/Logo";
-import { Check, Export, Film, Moon, Music, Redo, Sun, Undo, X } from "@/components/ui/icons";
+import { Check, Export, Film, Folder, Moon, Music, Redo, Sparkle, Sun, TextIcon, Undo, X } from "@/components/ui/icons";
 import { renderLocally } from "@/lib/localRender";
 import { EditorProvider, useEditor } from "./EditorContext";
 import { MediaLibrary } from "./MediaLibrary";
@@ -34,7 +34,10 @@ function Shell() {
   const [binTab, setBinTab] = useState<"media" | "audio" | "text" | "elements" | "stock">("media");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [timelineHeight, setTimelineHeight] = useState(330);
+  const [mediaWidth, setMediaWidth] = useState(280);
+  const [inspectorWidth, setInspectorWidth] = useState(350);
   const timelineResize = useRef<{ y: number; height: number } | null>(null);
+  const panelResize = useRef<{ side: "media" | "inspector"; x: number; width: number } | null>(null);
 
   useEffect(() => {
     try {
@@ -66,6 +69,39 @@ function Shell() {
       window.removeEventListener("pointerup", end);
     };
   }, []);
+
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const drag = panelResize.current;
+      if (!drag) return;
+      const delta = e.clientX - drag.x;
+      if (drag.side === "media") setMediaWidth(Math.max(220, Math.min(440, drag.width + delta)));
+      else setInspectorWidth(Math.max(290, Math.min(520, drag.width - delta)));
+    };
+    const end = () => {
+      if (panelResize.current) {
+        try { localStorage.setItem("cinemind-editor-panels", JSON.stringify({ media: mediaWidth, inspector: inspectorWidth })); } catch { /* Keep the current sizes for this session. */ }
+      }
+      panelResize.current = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
+  }, [mediaWidth, inspectorWidth]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("cinemind-editor-panels") ?? "null");
+      if (Number.isFinite(saved?.media)) setMediaWidth(Math.max(220, Math.min(440, saved.media)));
+      if (Number.isFinite(saved?.inspector)) setInspectorWidth(Math.max(290, Math.min(520, saved.inspector)));
+    } catch { /* Use balanced defaults. */ }
+  }, []);
+
+  const startPanelResize = (side: "media" | "inspector", e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    panelResize.current = { side, x: e.clientX, width: side === "media" ? mediaWidth : inspectorWidth };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
 
   // Keyboard shortcuts (spec §4.2).
   useEffect(() => {
@@ -132,9 +168,9 @@ function Shell() {
     );
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
+    <div className="cine-editor flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
       <TopBar onExport={() => setExportOpen(true)} onAI={() => setWorkspace("cine")} theme={theme} onToggleTheme={toggleTheme} />
-      <div className="hidden min-h-0 flex-1 gap-2 bg-bg-deep p-2 xl:grid xl:grid-cols-[190px_270px_minmax(320px,1fr)_350px] 2xl:grid-cols-[210px_300px_minmax(0,1fr)_390px]">
+      <div className="hidden min-h-0 flex-1 bg-bg-deep xl:grid" style={{ gridTemplateColumns: `190px ${mediaWidth}px 6px minmax(300px, 1fr) 6px ${inspectorWidth}px` }}>
         <EditorNavigation activeTool={activeTool} onSelect={(tool) => {
           setActiveTool(tool);
           if (tool === "AI Assistant") setWorkspace("cine");
@@ -146,9 +182,11 @@ function Shell() {
           if (tool === "Effects") setWorkspace("effects");
           if (tool === "Color") setWorkspace("color");
         }} />
-        <div className="min-h-0 overflow-hidden rounded-xl border border-line bg-surface shadow-panel"><MediaLibrary key={binTab} initialTab={binTab} /></div>
-        <div className="min-h-0 overflow-hidden rounded-xl border border-line bg-surface shadow-panel"><Preview onOpenMedia={() => setSmallScreenTab("media")} /></div>
-        <div className="min-h-0 overflow-hidden rounded-xl border border-line bg-surface shadow-panel"><SidePanel key={workspace} initialTab={workspace} /></div>
+        <div className="min-h-0 overflow-hidden border-y border-r border-line bg-surface"><MediaLibrary key={binTab} initialTab={binTab} /></div>
+        <PanelResizeHandle label="Resize media panel" onPointerDown={(e) => startPanelResize("media", e)} />
+        <div className="min-h-0 overflow-hidden border-y border-line bg-bg"><Preview onOpenMedia={() => setSmallScreenTab("media")} /></div>
+        <PanelResizeHandle label="Resize inspector panel" onPointerDown={(e) => startPanelResize("inspector", e)} />
+        <div className="min-h-0 overflow-hidden border-y border-l border-line bg-surface"><SidePanel key={workspace} initialTab={workspace} /></div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col xl:hidden">
         <nav aria-label="Editor workspace" className="grid h-11 shrink-0 grid-cols-4 border-b border-line bg-surface px-2">
@@ -197,8 +235,12 @@ function Shell() {
   );
 }
 
+function PanelResizeHandle({ label, onPointerDown }: { label: string; onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => void }) {
+  return <button type="button" aria-label={label} title={label} onPointerDown={onPointerDown} className="group relative z-10 hidden w-1.5 cursor-col-resize touch-none border-x border-line bg-bg-deep transition hover:border-accent/50 hover:bg-accent/15 xl:block"><span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong transition group-hover:bg-accent" /></button>;
+}
+
 function EditorNavigation({ activeTool, onSelect }: { activeTool: string; onSelect: (tool: string) => void }) {
-  const tools = [["▧", "Templates", false], ["✦", "AI Assistant", true], ["▱", "Assets", true], ["T", "Text & Titles", true], ["✧", "Effects", true], ["◈", "Transitions", true], ["◉", "Color", true], ["♫", "Audio", true], ["⌁", "Motion", false], ["▦", "Graphics", false], ["⌘", "Plugins", false]] as const;
+  const tools = [[Sparkle, "AI Assistant"], [Folder, "Assets"], [TextIcon, "Text & Titles"], [Film, "Effects"], [Film, "Transitions"], [Sparkle, "Color"], [Music, "Audio"]] as const;
   return (
     <nav aria-label="Editor tools" className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface px-2.5 py-3 shadow-panel">
       <Link href="/" className="mb-4 flex items-center gap-2 px-1.5" aria-label="CineMind home">
@@ -211,10 +253,10 @@ function EditorNavigation({ activeTool, onSelect }: { activeTool: string; onSele
         <NavLink href="/editor" label="Edit" active><Film size={16} /></NavLink>
         <NavLink href="/projects" label="Projects"><span aria-hidden="true">▤</span></NavLink>
       </div>
-      <p className="mb-1.5 mt-5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Create & refine</p>
+      <p className="mb-1.5 mt-5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Tools</p>
       <div className="thin-scroll min-h-0 space-y-1 overflow-y-auto">
-        <button type="button" onClick={() => onSelect("Media")} className={`flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${activeTool === "Media" ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><span className="grid w-4 shrink-0 place-items-center text-[14px]">▧</span><span>Media</span></button>
-        {tools.map(([icon, label, available]) => <button key={label} type="button" disabled={!available} onClick={() => onSelect(label)} title={available ? label : `${label} workspace is not implemented yet`} className={`flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition disabled:cursor-not-allowed disabled:opacity-35 ${activeTool === label ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><span className="grid w-4 shrink-0 place-items-center text-[14px] text-soft">{icon}</span><span className="truncate">{label}</span></button>)}
+        <button type="button" onClick={() => onSelect("Media")} className={`flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${activeTool === "Media" ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><Film size={16} /><span>Media</span></button>
+        {tools.map(([Icon, label]) => <button key={label} type="button" onClick={() => onSelect(label)} className={`flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${activeTool === label ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><Icon size={16} /><span className="truncate">{label}</span></button>)}
       </div>
       <div className="mt-3 rounded-xl border border-accent/20 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.20),rgba(17,18,32,0.6)_72%)] p-3 text-center">
         <span className="mx-auto grid h-8 w-8 place-items-center rounded-xl bg-accent/15 text-accent"><Music size={16} /></span>
