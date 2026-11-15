@@ -38,13 +38,22 @@ export interface TransformKeyframe {
   values: Partial<TransformKeyframeValues>;
 }
 
+export type VisualEffectId = "film-grain" | "vhs" | "negative" | "sepia" | "high-contrast" | "night-vision" | "cross-process" | "bleach-bypass" | "soft-focus" | "pixelate" | "edge-detect" | "duotone-blue" | "duotone-orange" | "faded-film" | "teal-orange" | "chromatic-shift" | "lens-distortion" | "posterize" | "solarize" | "monochrome";
+export interface VisualEffectLayer {
+  id: VisualEffectId;
+  enabled: boolean;
+  intensity: number;
+}
+
 /** Per-clip effects. Visual ones apply to video/image/title clips, audio ones to anything with sound. */
 export interface ClipEffects {
   look?: "none" | "bw" | "vintage" | "warm" | "cool" | "cinematic";
   /** Built-in CineMind image effects. These are generated procedurally, not third-party asset files. */
-  visualPreset?: "none" | "film-grain" | "vhs" | "negative" | "sepia" | "high-contrast" | "night-vision";
+  visualPreset?: "none" | VisualEffectId;
   /** Strength of the selected visual preset, 0..1. */
   visualIntensity?: number;
+  /** Ordered, independently adjustable, stackable video effects. */
+  visualEffects?: VisualEffectLayer[];
   /** -1..1 */
   brightness?: number;
   /** 0..2 (1 = unchanged) */

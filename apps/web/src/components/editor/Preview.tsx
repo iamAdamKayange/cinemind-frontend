@@ -44,6 +44,8 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
     .filter((c) => c.assetId && assetById.get(c.assetId)?.url);
 
   const asset = videoClip?.clip.assetId ? assetById.get(videoClip.clip.assetId) : null;
+  const clipFx = videoClip?.clip.fx;
+  const previewEffects = clipFx?.visualEffects?.length ? clipFx.visualEffects.filter((layer) => layer.enabled) : clipFx?.visualPreset && clipFx.visualPreset !== "none" ? [{ id: clipFx.visualPreset, intensity: clipFx.visualIntensity ?? 0.6, enabled: true }] : [];
   useEffect(() => { setPlaybackError(false); }, [asset?.id, asset?.url]);
   const tf = videoClip ? evaluateTransform(videoClip.clip, playhead - videoClip.clip.timelineStartFrames) : undefined;
   const opacity = tf?.opacity ?? 1;
@@ -53,6 +55,7 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
   // Crop the source first (object-view-box), then fit or fill the frame — same order as the export.
   const mediaStyle = {
     objectFit: tf?.fit === "fill" && !cropping ? "cover" : "contain",
+    ...(previewEffects.some((layer) => layer.id === "pixelate") ? { imageRendering: "pixelated" as const } : {}),
     ...(crop && crop.left + crop.right + crop.top + crop.bottom > 0
       ? { objectViewBox: `inset(${crop.top * 100}% ${crop.right * 100}% ${crop.bottom * 100}% ${crop.left * 100}%)` }
       : {}),
@@ -70,9 +73,6 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
     }
     return 0;
   }, [doc, playhead]);
-  const visualPreset = videoClip?.clip.fx?.visualPreset;
-  const visualIntensity = Math.max(0, Math.min(1, videoClip?.clip.fx?.visualIntensity ?? 0.6));
-
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-bg-deep">
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-line px-4 text-[12px] text-muted">
@@ -94,8 +94,8 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
             )}
             {videoClip && !asset?.url && asset?.photo && <Photo photo={asset.photo} sizes="60vw" className="scale-105" />}
           </div>
-          {visualPreset === "film-grain" && <div aria-hidden="true" className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ opacity: visualIntensity * 0.48, backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E\")", backgroundSize: "180px 180px" }} />}
-          {visualPreset === "vhs" && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ opacity: visualIntensity * 0.55, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.55) 4px, transparent 5px)" }} />}
+          {previewEffects.filter((layer) => layer.id === "film-grain").map((layer, i) => <div key={`grain-${i}`} aria-hidden="true" className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ opacity: layer.intensity * 0.48, backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E\")", backgroundSize: "180px 180px" }} />)}
+          {previewEffects.filter((layer) => layer.id === "vhs").map((layer, i) => <div key={`vhs-${i}`} aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ opacity: layer.intensity * 0.55, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.55) 4px, transparent 5px)" }} />)}
           {videoClip && (playbackError || (asset && !asset.url && !asset.photo) || !asset) && <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#090a11]/95 px-5 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl border border-sun/25 bg-sun/10 text-sun"><Film size={19} /></span>
             <p className="text-[13px] font-semibold text-text">{playbackError ? "This video could not be decoded" : "The original media is offline"}</p>

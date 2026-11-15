@@ -205,7 +205,43 @@ export function videoFx(fx: ClipEffects | undefined): string[] {
   if (fx.visualPreset === "sepia") out.push("colorchannelmixer=rr=.393:rg=.769:rb=.189:gr=.349:gg=.686:gb=.168:br=.272:bg=.534:bb=.131");
   if (fx.visualPreset === "high-contrast") out.push(`eq=contrast=${n3(1 + strength * 0.65)}`);
   if (fx.visualPreset === "night-vision") out.push(`hue=s=${n3(1 - strength * 0.65)}`, `colorbalance=gs=${n3(strength * 0.28)}:gm=${n3(strength * 0.38)}:gh=${n3(strength * 0.15)}:bs=${n3(-strength * 0.3)}`);
+  if (fx.visualPreset === "cross-process") out.push("curves=preset=cross_process");
+  if (fx.visualPreset === "bleach-bypass") out.push(`eq=contrast=${n3(1 + strength * 0.42)}:saturation=${n3(1 - strength * 0.52)}`, `colorbalance=bs=${n3(strength * 0.08)}:rm=${n3(strength * 0.06)}`);
+  if (fx.visualPreset === "soft-focus") out.push(`gblur=sigma=${n3(strength * 3)}`);
+  if (fx.visualPreset === "pixelate" && strength > 0) out.push(`scale=iw/${Math.round(2 + strength * 22)}:ih/${Math.round(2 + strength * 22)}:flags=neighbor`, `scale=iw*${Math.round(2 + strength * 22)}:ih*${Math.round(2 + strength * 22)}:flags=neighbor`);
+  if (fx.visualPreset === "edge-detect") out.push(`edgedetect=mode=colormix:high=${n3(0.05 + strength * 0.2)}`);
+  if (fx.visualPreset === "duotone-blue") out.push(`hue=s=0`, `colorize=h=215:s=0.75:mix=${n3(strength)}`);
+  if (fx.visualPreset === "duotone-orange") out.push(`hue=s=0`, `colorize=h=32:s=0.75:mix=${n3(strength)}`);
+  if (fx.visualPreset === "faded-film") out.push("curves=preset=lighter", `eq=saturation=${n3(1 - strength * 0.35)}:contrast=${n3(1 - strength * 0.12)}`);
+  if (fx.visualPreset === "teal-orange") out.push(`colorbalance=bs=${n3(strength * 0.2)}:gs=${n3(strength * 0.08)}:rm=${n3(strength * 0.14)}:rh=${n3(strength * 0.18)}`);
+  for (const layer of fx.visualEffects ?? []) if (layer.enabled) out.push(...visualLayerFx(layer.id, layer.intensity));
   return out;
+}
+
+function visualLayerFx(id: NonNullable<ClipEffects["visualEffects"]>[number]["id"], amount: number): string[] {
+  const strength = Math.max(0, Math.min(1, amount));
+  switch (id) {
+    case "film-grain": return [`noise=alls=${n3(strength * 28)}:allf=t+u`];
+    case "vhs": return [`eq=contrast=${n3(1 + strength * 0.2)}:saturation=${n3(1 - strength * 0.35)}`, `noise=alls=${n3(strength * 16)}:allf=t`, "drawgrid=w=iw:h=4:t=1:c=black@0.22"];
+    case "negative": return ["negate"];
+    case "sepia": return ["colorchannelmixer=rr=.393:rg=.769:rb=.189:gr=.349:gg=.686:gb=.168:br=.272:bg=.534:bb=.131"];
+    case "high-contrast": return [`eq=contrast=${n3(1 + strength * 0.65)}`];
+    case "night-vision": return [`hue=s=${n3(1 - strength * 0.65)}`, `colorbalance=gs=${n3(strength * 0.28)}:gm=${n3(strength * 0.38)}:gh=${n3(strength * 0.15)}:bs=${n3(-strength * 0.3)}`];
+    case "cross-process": return ["curves=preset=cross_process"];
+    case "bleach-bypass": return [`eq=contrast=${n3(1 + strength * 0.42)}:saturation=${n3(1 - strength * 0.52)}`, `colorbalance=bs=${n3(strength * 0.08)}:rm=${n3(strength * 0.06)}`];
+    case "soft-focus": return strength ? [`gblur=sigma=${n3(strength * 3)}`] : [];
+    case "pixelate": { const block = Math.round(2 + strength * 22); return strength ? [`scale=iw/${block}:ih/${block}:flags=neighbor`, `scale=iw*${block}:ih*${block}:flags=neighbor`] : []; }
+    case "edge-detect": return [`edgedetect=mode=colormix:high=${n3(0.05 + strength * 0.2)}`];
+    case "duotone-blue": return ["hue=s=0", `colorize=h=215:s=0.75:mix=${n3(strength)}`];
+    case "duotone-orange": return ["hue=s=0", `colorize=h=32:s=0.75:mix=${n3(strength)}`];
+    case "faded-film": return ["curves=preset=lighter", `eq=saturation=${n3(1 - strength * 0.35)}:contrast=${n3(1 - strength * 0.12)}`];
+    case "teal-orange": return [`colorbalance=bs=${n3(strength * 0.2)}:gs=${n3(strength * 0.08)}:rm=${n3(strength * 0.14)}:rh=${n3(strength * 0.18)}`];
+    case "chromatic-shift": { const shift = Math.round(strength * 12); return shift ? [`chromashift=cbh=${shift}:crh=-${shift}:edge=smear`] : []; }
+    case "lens-distortion": return strength ? [`lenscorrection=k1=${n3(strength * 0.16)}:k2=${n3(strength * 0.05)}`] : [];
+    case "posterize": { const step = Math.round(8 + (1 - strength) * 56); return [`lutrgb=r='trunc(val/${step})*${step}':g='trunc(val/${step})*${step}':b='trunc(val/${step})*${step}'`]; }
+    case "solarize": return [`lutrgb=r='if(gt(val,${Math.round(255 * (1 - strength))}),255-val,val)':g='if(gt(val,${Math.round(255 * (1 - strength))}),255-val,val)':b='if(gt(val,${Math.round(255 * (1 - strength))}),255-val,val)'`];
+    case "monochrome": return [`hue=s=${n3(1 - strength)}`];
+  }
 }
 
 /** Audio effects → FFmpeg filters. */

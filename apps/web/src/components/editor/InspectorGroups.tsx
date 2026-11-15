@@ -1,6 +1,6 @@
 "use client";
 
-import { clipDuration, evaluateTransform, findClip, type ClipEffects, type Transform, type TransformKeyframe } from "@cinemind/timeline-engine";
+import { clipDuration, evaluateTransform, findClip, type ClipEffects, type Transform, type TransformKeyframe, type VisualEffectId, type VisualEffectLayer } from "@cinemind/timeline-engine";
 import { useState } from "react";
 import { useEditor } from "./EditorContext";
 
@@ -135,22 +135,46 @@ const LOOK_SWATCHES: Record<NonNullable<ClipEffects["look"]>, string> = {
   bw: "linear-gradient(115deg,#111 0%,#454545 42%,#aaa 76%,#eee 100%)",
 };
 
-const VISUAL_PRESETS: { id: NonNullable<ClipEffects["visualPreset"]>; name: string; note: string; swatch: string }[] = [
-  { id: "none", name: "None", note: "Clean source", swatch: "linear-gradient(135deg,#172b3d,#9ac5c9 48%,#efad68)" },
+const VISUAL_PRESETS: { id: VisualEffectId; name: string; note: string; swatch: string }[] = [
   { id: "film-grain", name: "Film grain", note: "Organic texture", swatch: "radial-gradient(#fff8 0.5px,transparent .8px),linear-gradient(135deg,#403344,#b3815c)", },
   { id: "vhs", name: "VHS", note: "Tape texture", swatch: "repeating-linear-gradient(0deg,#ffffff18 0 1px,transparent 1px 4px),linear-gradient(120deg,#172b5a,#be4d79)" },
   { id: "negative", name: "Negative", note: "Invert colors", swatch: "linear-gradient(135deg,#ffe1ac,#7188ff 48%,#1b2032)" },
   { id: "sepia", name: "Sepia", note: "Warm archive", swatch: "linear-gradient(135deg,#35221a,#aa7148 50%,#e5c392)" },
   { id: "high-contrast", name: "Punch", note: "Deep contrast", swatch: "linear-gradient(135deg,#080b18,#34395b 48%,#f4e4b3)" },
   { id: "night-vision", name: "Night vision", note: "Green monochrome", swatch: "linear-gradient(135deg,#061a12,#19a56b 55%,#bdff9b)" },
+  { id: "cross-process", name: "Cross process", note: "Color reversal", swatch: "linear-gradient(135deg,#382889,#ed5b83 52%,#f4d649)" },
+  { id: "bleach-bypass", name: "Bleach bypass", note: "Silver retention", swatch: "linear-gradient(135deg,#192431,#788080 55%,#e6d7b5)" },
+  { id: "soft-focus", name: "Soft focus", note: "Gentle diffusion", swatch: "radial-gradient(circle at 70% 30%,#fff9,transparent 38%),linear-gradient(135deg,#714c81,#edb1c1)" },
+  { id: "pixelate", name: "Pixelate", note: "Mosaic blocks", swatch: "repeating-linear-gradient(0deg,#8af2ff 0 5px,#15253a 5px 10px),repeating-linear-gradient(90deg,transparent 0 5px,#15253a 5px 10px)" },
+  { id: "edge-detect", name: "Edge map", note: "Outline detail", swatch: "linear-gradient(135deg,#03060a,#00d5ff 45%,#f3f7ff)" },
+  { id: "duotone-blue", name: "Blue duotone", note: "Two-tone grade", swatch: "linear-gradient(135deg,#08162b,#1675ad 55%,#b9e9ff)" },
+  { id: "duotone-orange", name: "Amber duotone", note: "Two-tone grade", swatch: "linear-gradient(135deg,#25120d,#c66023 55%,#ffe0a1)" },
+  { id: "faded-film", name: "Faded film", note: "Lifted blacks", swatch: "linear-gradient(135deg,#736d69,#afa08d 55%,#eee1c6)" },
+  { id: "teal-orange", name: "Teal & orange", note: "Cinema split tone", swatch: "linear-gradient(120deg,#174653,#326b6a 48%,#d58a4b 60%,#f4ca87)" },
+  { id: "chromatic-shift", name: "Chromatic shift", note: "RGB fringe", swatch: "linear-gradient(120deg,#e84d83 0 35%,#121c38 45% 55%,#45dcff 70%)" },
+  { id: "lens-distortion", name: "Lens warp", note: "Radial distortion", swatch: "radial-gradient(circle at center,#4ea0c0,#182038 72%)" },
+  { id: "posterize", name: "Posterize", note: "Graphic color steps", swatch: "linear-gradient(135deg,#181743 0 25%,#5440a4 25% 50%,#e8568e 50% 75%,#f8d553 75%)" },
+  { id: "solarize", name: "Solarize", note: "Threshold inversion", swatch: "linear-gradient(135deg,#15172c,#f5d94c 50%,#fa623f)" },
+  { id: "monochrome", name: "Monochrome", note: "Adjustable B&W", swatch: "linear-gradient(135deg,#111,#777 50%,#eee)" },
 ];
 
+const effectCategory = (id: VisualEffectId) => {
+  if (["film-grain", "vhs", "sepia", "cross-process", "bleach-bypass", "faded-film"].includes(id)) return "Film";
+  if (["duotone-blue", "duotone-orange", "teal-orange", "monochrome"].includes(id)) return "Color";
+  return "Stylize";
+};
+
 export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: "all" | "effects" | "color" }) {
+  const [effectQuery, setEffectQuery] = useState("");
+  const [category, setCategory] = useState("All");
   const { doc, run } = useEditor();
   const hit = findClip(doc, clipId);
   if (!hit) return null;
   const fx = hit.clip.fx ?? {};
   const set = (p: Partial<ClipEffects>) => run([{ type: "clip.setEffects", clipId, fx: p }]);
+  const stack: VisualEffectLayer[] = fx.visualEffects ?? (fx.visualPreset && fx.visualPreset !== "none" ? [{ id: fx.visualPreset, enabled: true, intensity: fx.visualIntensity ?? 0.6 }] : []);
+  const available = VISUAL_PRESETS.filter((preset) => (!effectQuery.trim() || `${preset.name} ${preset.note} ${effectCategory(preset.id)}`.toLowerCase().includes(effectQuery.toLowerCase())) && (category === "All" || effectCategory(preset.id) === category));
+  const saveStack = (layers: VisualEffectLayer[]) => set({ visualPreset: "none", visualIntensity: 0, visualEffects: layers });
   return (
     <Group title={mode === "color" ? "Color grading" : mode === "effects" ? "Visual effects" : "Effects & color"}>
       {mode !== "effects" && <div className="grid grid-cols-3 gap-1.5">
@@ -171,23 +195,33 @@ export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: 
         <Slider label="Saturation" min={0} max={3} step={0.02} value={fx.saturation ?? 1} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ saturation: v })} />
       </>}
       {mode !== "color" && <>
+        <div className="flex items-center justify-between"><span className="text-[11px] font-semibold text-soft">Effect library <span className="text-faint">{stack.length}/8 stacked</span></span><button type="button" onClick={() => saveStack([])} disabled={!stack.length && (!fx.visualPreset || fx.visualPreset === "none")} className="text-[10px] text-muted hover:text-accent disabled:opacity-40">Clear stack</button></div>
+        <input value={effectQuery} onChange={(e) => setEffectQuery(e.target.value)} placeholder="Search 20 built-in effects…" className="w-full rounded-md border border-line bg-bg-deep px-2.5 py-2 text-[11px] outline-none focus:border-accent/50" />
+        <div className="flex gap-1">{["All", "Film", "Stylize", "Color"].map((item) => <button key={item} type="button" onClick={() => setCategory(item)} className={`rounded-full border px-2.5 py-1 text-[10px] ${category === item ? "border-accent/50 bg-accent/10 text-accent" : "border-line text-muted hover:text-soft"}`}>{item}</button>)}</div>
         <div className="grid grid-cols-2 gap-1.5">
-          {VISUAL_PRESETS.map((preset) => {
-            const active = (fx.visualPreset ?? "none") === preset.id;
-            return <button key={preset.id} type="button" aria-pressed={active} onClick={() => set({ visualPreset: preset.id, visualIntensity: preset.id === "none" ? 0 : fx.visualIntensity ?? 0.6 })} className={`overflow-hidden rounded-lg border text-left transition ${active ? "border-accent ring-1 ring-accent/30" : "border-line hover:border-line-strong"}`}>
+          {available.map((preset) => {
+            const active = stack.some((layer) => layer.id === preset.id);
+            return <button key={preset.id} type="button" aria-pressed={active} disabled={!active && stack.length >= 8} onClick={() => {
+              if (active) saveStack(stack.filter((layer) => layer.id !== preset.id));
+              else saveStack([...stack, { id: preset.id as VisualEffectId, enabled: true, intensity: 0.6 }]);
+            }} className={`relative overflow-hidden rounded-lg border text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-accent ring-1 ring-accent/30" : "border-line hover:border-line-strong"}`}>
+              {active && <span className="absolute right-1.5 top-1.5 z-10 rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-bold text-accent-ink">IN STACK</span>}
               <span className="block h-8" style={{ background: preset.swatch, backgroundSize: preset.id === "film-grain" ? "3px 3px,auto" : undefined }} />
               <span className="block px-2 py-1.5"><span className="block text-[10px] font-semibold text-soft">{preset.name}</span><span className="block text-[9px] text-faint">{preset.note}</span></span>
             </button>;
           })}
         </div>
-        {fx.visualPreset && fx.visualPreset !== "none" && <Slider label="Effect strength" min={0} max={1} step={0.01} value={fx.visualIntensity ?? 0.6} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ visualIntensity: v })} />}
+        {stack.map((layer) => <div key={layer.id} className="rounded-lg border border-line bg-bg-deep/60 p-2.5">
+          <div className="flex items-center justify-between gap-2"><button type="button" onClick={() => saveStack(stack.map((item) => item.id === layer.id ? { ...item, enabled: !item.enabled } : item))} className="flex min-w-0 items-center gap-2 text-[11px] font-semibold text-soft"><span className={`grid h-4 w-4 place-items-center rounded border ${layer.enabled ? "border-accent bg-accent text-white" : "border-line text-transparent"}`}>✓</span><span className="truncate">{VISUAL_PRESETS.find((preset) => preset.id === layer.id)?.name ?? layer.id}</span></button><button type="button" aria-label={`Remove ${layer.id}`} onClick={() => saveStack(stack.filter((item) => item.id !== layer.id))} className="px-1 text-muted hover:text-danger">×</button></div>
+          <Slider label="Strength" min={0} max={1} step={0.01} value={layer.intensity} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => saveStack(stack.map((item) => item.id === layer.id ? { ...item, intensity: v } : item))} />
+        </div>)}
       </>}
       {mode !== "color" && <>
         <Slider label="Blur" min={0} max={20} step={0.5} value={fx.blur ?? 0} fmt={(v) => `${v} px`} onCommit={(v) => set({ blur: v })} />
         <Slider label="Sharpen" min={0} max={5} step={0.1} value={fx.sharpen ?? 0} fmt={(v) => v.toFixed(1)} onCommit={(v) => set({ sharpen: v })} />
         <Slider label="Vignette" min={0} max={1} step={0.01} value={fx.vignette ?? 0} fmt={(v) => `${Math.round(v * 100)}%`} onCommit={(v) => set({ vignette: v })} />
       </>}
-      <ActionBtn label={mode === "color" ? "Reset color" : mode === "effects" ? "Reset effects" : "Reset effects & color"} onClick={() => set(mode === "color" ? { look: "none", brightness: 0, contrast: 1, saturation: 1 } : mode === "effects" ? { blur: 0, sharpen: 0, vignette: 0, visualPreset: "none", visualIntensity: 0 } : { look: "none", brightness: 0, contrast: 1, saturation: 1, blur: 0, sharpen: 0, vignette: 0, visualPreset: "none", visualIntensity: 0 })} />
+      <ActionBtn label={mode === "color" ? "Reset color" : mode === "effects" ? "Reset effects" : "Reset effects & color"} onClick={() => set(mode === "color" ? { look: "none", brightness: 0, contrast: 1, saturation: 1 } : mode === "effects" ? { blur: 0, sharpen: 0, vignette: 0, visualPreset: "none", visualIntensity: 0, visualEffects: [] } : { look: "none", brightness: 0, contrast: 1, saturation: 1, blur: 0, sharpen: 0, vignette: 0, visualPreset: "none", visualIntensity: 0, visualEffects: [] })} />
     </Group>
   );
 }
@@ -300,5 +334,45 @@ export function cssFx(fx: ClipEffects | undefined): string {
   if (fx.visualPreset === "sepia") parts.push(`sepia(${strength})`);
   if (fx.visualPreset === "high-contrast") parts.push(`contrast(${1 + strength * 0.65})`);
   if (fx.visualPreset === "night-vision") parts.push(`grayscale(${strength * 0.65})`, `sepia(${strength})`, `hue-rotate(${strength * 65}deg)`, `saturate(${1 + strength * 3})`);
+  if (fx.visualPreset === "cross-process") parts.push("contrast(1.12) saturate(1.3) hue-rotate(8deg)");
+  if (fx.visualPreset === "bleach-bypass") parts.push(`contrast(${1 + strength * 0.42})`, `saturate(${1 - strength * 0.52})`);
+  if (fx.visualPreset === "soft-focus") parts.push(`blur(${strength * 1.8}px)`);
+  if (fx.visualPreset === "pixelate") parts.push(`contrast(${1 + strength * 0.08})`);
+  if (fx.visualPreset === "edge-detect") parts.push(`grayscale(1) contrast(${1.5 + strength * 1.5})`);
+  if (fx.visualPreset === "duotone-blue") parts.push("grayscale(1) sepia(.8) hue-rotate(165deg) saturate(1.5)");
+  if (fx.visualPreset === "duotone-orange") parts.push("grayscale(1) sepia(1) saturate(1.5)");
+  if (fx.visualPreset === "faded-film") parts.push(`contrast(${1 - strength * 0.12})`, `saturate(${1 - strength * 0.35})`, `brightness(${1 + strength * 0.08})`);
+  if (fx.visualPreset === "teal-orange") parts.push("contrast(1.08) saturate(1.15) sepia(.12) hue-rotate(5deg)");
+  if (fx.visualPreset === "chromatic-shift") parts.push("saturate(1.4) contrast(1.06)");
+  if (fx.visualPreset === "lens-distortion") parts.push("perspective(500px) rotateY(1deg) scale(1.02)");
+  if (fx.visualPreset === "posterize") parts.push("contrast(1.5) saturate(1.4)");
+  if (fx.visualPreset === "solarize") parts.push("contrast(1.35) saturate(1.25) hue-rotate(165deg)");
+  if (fx.visualPreset === "monochrome") parts.push(`grayscale(${strength})`);
+  for (const layer of fx.visualEffects ?? []) if (layer.enabled) parts.push(...cssVisualLayer(layer.id, layer.intensity));
   return parts.filter(Boolean).join(" ");
+}
+
+function cssVisualLayer(id: VisualEffectId, amount: number): string[] {
+  const s = Math.max(0, Math.min(1, amount));
+  switch (id) {
+    case "film-grain": case "vhs": return [];
+    case "negative": return ["invert(1)"];
+    case "sepia": return [`sepia(${s})`];
+    case "high-contrast": return [`contrast(${1 + s * 0.65})`];
+    case "night-vision": return [`grayscale(${s * 0.65})`, `sepia(${s})`, `hue-rotate(${s * 65}deg)`, `saturate(${1 + s * 3})`];
+    case "cross-process": return ["contrast(1.12)", "saturate(1.3)", "hue-rotate(8deg)"];
+    case "bleach-bypass": return [`contrast(${1 + s * 0.42})`, `saturate(${1 - s * 0.52})`];
+    case "soft-focus": return [`blur(${s * 1.8}px)`];
+    case "pixelate": return ["contrast(1.08)"];
+    case "edge-detect": return [`grayscale(1)`, `contrast(${1.5 + s * 1.5})`];
+    case "duotone-blue": return ["grayscale(1)", "sepia(.8)", "hue-rotate(165deg)", "saturate(1.5)"];
+    case "duotone-orange": return ["grayscale(1)", "sepia(1)", "saturate(1.5)"];
+    case "faded-film": return [`contrast(${1 - s * 0.12})`, `saturate(${1 - s * 0.35})`, `brightness(${1 + s * 0.08})`];
+    case "teal-orange": return ["contrast(1.08)", "saturate(1.15)", "sepia(.12)", "hue-rotate(5deg)"];
+    case "chromatic-shift": return ["saturate(1.4)", "contrast(1.06)"];
+    case "lens-distortion": return [`perspective(${Math.round(1000 - s * 500)}px)`, `rotateY(${s}deg)`, `scale(${1 + s * 0.02})`];
+    case "posterize": return ["contrast(1.5)", "saturate(1.4)"];
+    case "solarize": return ["contrast(1.35)", "saturate(1.25)", "hue-rotate(165deg)"];
+    case "monochrome": return [`grayscale(${s})`];
+  }
 }
