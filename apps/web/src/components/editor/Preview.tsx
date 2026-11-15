@@ -18,6 +18,7 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
   const { doc, playhead, playing, togglePlay, setPlayhead, assetById, duration, loop, setLoop, projectId } = useEditor();
   const [frameOpen, setFrameOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
+  const [playbackError, setPlaybackError] = useState(false);
   const { run, select } = useEditor();
   const preset = framePresetFor(projectId ?? "demo", doc.sequence.width, doc.sequence.height);
   const { width, height } = doc.sequence;
@@ -43,6 +44,7 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
     .filter((c) => c.assetId && assetById.get(c.assetId)?.url);
 
   const asset = videoClip?.clip.assetId ? assetById.get(videoClip.clip.assetId) : null;
+  useEffect(() => { setPlaybackError(false); }, [asset?.id, asset?.url]);
   const tf = videoClip ? evaluateTransform(videoClip.clip, playhead - videoClip.clip.timelineStartFrames) : undefined;
   const opacity = tf?.opacity ?? 1;
   const scale = tf?.scaleX ?? 1;
@@ -81,8 +83,8 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
           style={{ aspectRatio: `${width} / ${height}`, height: width >= height ? undefined : "100%", width: width >= height ? "100%" : undefined }}
         >
           <div className="absolute inset-0" style={{ opacity, transform: wrapperTransform, filter: cssFx(videoClip?.clip.fx) || undefined, boxShadow: videoClip?.clip.fx?.vignette ? `inset 0 0 ${Math.round(140 * videoClip.clip.fx.vignette)}px rgba(0,0,0,${0.8 * videoClip.clip.fx.vignette})` : undefined }}>
-            {videoClip && asset?.url && asset.kind === "video" && (
-              <SyncedMedia kind="video" src={asset.url} clip={videoClip.clip} playhead={playhead} playing={playing} muted={videoClip.muted} mediaStyle={mediaStyle} />
+            {videoClip && asset?.url && asset.kind === "video" && !playbackError && (
+              <SyncedMedia kind="video" src={asset.url} clip={videoClip.clip} playhead={playhead} playing={playing} muted={videoClip.muted} mediaStyle={mediaStyle} onError={() => setPlaybackError(true)} />
             )}
             {videoClip && asset?.url && asset.kind === "image" && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -90,6 +92,11 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
             )}
             {videoClip && !asset?.url && asset?.photo && <Photo photo={asset.photo} sizes="60vw" className="scale-105" />}
           </div>
+          {videoClip && (playbackError || (asset && !asset.url && !asset.photo) || !asset) && <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#090a11]/95 px-5 text-center">
+            <span className="grid h-10 w-10 place-items-center rounded-xl border border-sun/25 bg-sun/10 text-sun"><Film size={19} /></span>
+            <p className="text-[13px] font-semibold text-text">{playbackError ? "This video could not be decoded" : "The original media is offline"}</p>
+            <p className="max-w-[280px] text-[11px] leading-relaxed text-muted">{playbackError ? "Try relinking a supported MP4 (H.264) file." : "Media is stored on the device that imported it. In the Media bin, choose Relink file and select the original."}</p>
+          </div>}
           {!videoClip && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center">
             <span className="grid h-12 w-12 place-items-center rounded-2xl border border-accent/20 bg-accent/10 text-accent"><Film size={22} /></span>
             <div><p className="text-[14px] font-semibold text-text">{sequenceHasVideo ? "No clip at this playhead" : "Start with your footage"}</p><p className="mt-1 max-w-[260px] text-[11px] leading-relaxed text-muted">Import a video, music or image. Add it to the timeline, then select a clip to reveal its editing controls.</p></div>
@@ -176,7 +183,7 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
   );
 }
 
-function SyncedMedia({ kind, src, clip, playhead, playing, muted, mediaStyle }: { kind: "video" | "audio"; src: string; clip: Clip; playhead: number; playing: boolean; muted: boolean; mediaStyle?: React.CSSProperties }) {
+function SyncedMedia({ kind, src, clip, playhead, playing, muted, mediaStyle, onError }: { kind: "video" | "audio"; src: string; clip: Clip; playhead: number; playing: boolean; muted: boolean; mediaStyle?: React.CSSProperties; onError?: () => void }) {
   const ref = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const target = (playhead - clip.timelineStartFrames + clip.sourceInFrames) / FPS;
 
@@ -197,5 +204,5 @@ function SyncedMedia({ kind, src, clip, playhead, playing, muted, mediaStyle }: 
   }, [target, playing, muted, playhead, clip]);
 
   if (kind === "audio") return <audio ref={ref} src={src} preload="auto" />;
-  return <video ref={ref} src={src} preload="auto" playsInline className="h-full w-full" style={mediaStyle} />;
+  return <video ref={ref} src={src} preload="auto" playsInline onError={onError} className="h-full w-full" style={mediaStyle} />;
 }

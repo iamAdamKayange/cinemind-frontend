@@ -36,8 +36,15 @@ function Shell() {
   const [timelineHeight, setTimelineHeight] = useState(330);
   const [mediaWidth, setMediaWidth] = useState(280);
   const [inspectorWidth, setInspectorWidth] = useState(350);
+  const [navWidth, setNavWidth] = useState(190);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [mediaCollapsed, setMediaCollapsed] = useState(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [timelineVisible, setTimelineVisible] = useState(true);
+  const [layoutMenu, setLayoutMenu] = useState(false);
+  const [panelsLoaded, setPanelsLoaded] = useState(false);
   const timelineResize = useRef<{ y: number; height: number } | null>(null);
-  const panelResize = useRef<{ side: "media" | "inspector"; x: number; width: number } | null>(null);
+  const panelResize = useRef<{ side: "nav" | "media" | "inspector"; x: number; width: number } | null>(null);
 
   useEffect(() => {
     try {
@@ -75,31 +82,43 @@ function Shell() {
       const drag = panelResize.current;
       if (!drag) return;
       const delta = e.clientX - drag.x;
-      if (drag.side === "media") setMediaWidth(Math.max(220, Math.min(440, drag.width + delta)));
+      if (drag.side === "nav") setNavWidth(Math.max(150, Math.min(300, drag.width + delta)));
+      else if (drag.side === "media") setMediaWidth(Math.max(220, Math.min(440, drag.width + delta)));
       else setInspectorWidth(Math.max(290, Math.min(520, drag.width - delta)));
     };
     const end = () => {
       if (panelResize.current) {
-        try { localStorage.setItem("cinemind-editor-panels", JSON.stringify({ media: mediaWidth, inspector: inspectorWidth })); } catch { /* Keep the current sizes for this session. */ }
+        try { localStorage.setItem("cinemind-editor-panels", JSON.stringify({ nav: navWidth, media: mediaWidth, inspector: inspectorWidth, navCollapsed, mediaCollapsed, inspectorCollapsed, timelineVisible })); } catch { /* Keep the current sizes for this session. */ }
       }
       panelResize.current = null;
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
     return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", end); };
-  }, [mediaWidth, inspectorWidth]);
+  }, [navWidth, mediaWidth, inspectorWidth, navCollapsed, mediaCollapsed, inspectorCollapsed, timelineVisible]);
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("cinemind-editor-panels") ?? "null");
+      if (Number.isFinite(saved?.nav)) setNavWidth(Math.max(150, Math.min(300, saved.nav)));
       if (Number.isFinite(saved?.media)) setMediaWidth(Math.max(220, Math.min(440, saved.media)));
       if (Number.isFinite(saved?.inspector)) setInspectorWidth(Math.max(290, Math.min(520, saved.inspector)));
+      if (typeof saved?.navCollapsed === "boolean") setNavCollapsed(saved.navCollapsed);
+      if (typeof saved?.mediaCollapsed === "boolean") setMediaCollapsed(saved.mediaCollapsed);
+      if (typeof saved?.inspectorCollapsed === "boolean") setInspectorCollapsed(saved.inspectorCollapsed);
+      if (typeof saved?.timelineVisible === "boolean") setTimelineVisible(saved.timelineVisible);
     } catch { /* Use balanced defaults. */ }
+    setPanelsLoaded(true);
   }, []);
 
-  const startPanelResize = (side: "media" | "inspector", e: React.PointerEvent<HTMLButtonElement>) => {
+  useEffect(() => {
+    if (!panelsLoaded) return;
+    try { localStorage.setItem("cinemind-editor-panels", JSON.stringify({ nav: navWidth, media: mediaWidth, inspector: inspectorWidth, navCollapsed, mediaCollapsed, inspectorCollapsed, timelineVisible })); } catch { /* Keep the current layout for this session. */ }
+  }, [panelsLoaded, navWidth, mediaWidth, inspectorWidth, navCollapsed, mediaCollapsed, inspectorCollapsed, timelineVisible]);
+
+  const startPanelResize = (side: "nav" | "media" | "inspector", e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    panelResize.current = { side, x: e.clientX, width: side === "media" ? mediaWidth : inspectorWidth };
+    panelResize.current = { side, x: e.clientX, width: side === "nav" ? navWidth : side === "media" ? mediaWidth : inspectorWidth };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -169,9 +188,20 @@ function Shell() {
 
   return (
     <div className="cine-editor flex h-[100dvh] flex-col overflow-hidden bg-bg text-text">
-      <TopBar onExport={() => setExportOpen(true)} onAI={() => setWorkspace("cine")} theme={theme} onToggleTheme={toggleTheme} />
-      <div className="hidden min-h-0 flex-1 bg-bg-deep xl:grid" style={{ gridTemplateColumns: `190px ${mediaWidth}px 6px minmax(300px, 1fr) 6px ${inspectorWidth}px` }}>
-        <EditorNavigation activeTool={activeTool} onSelect={(tool) => {
+      <TopBar onExport={() => setExportOpen(true)} onAI={() => setWorkspace("cine")} theme={theme} onToggleTheme={toggleTheme} onLayout={() => setLayoutMenu((open) => !open)} />
+      {layoutMenu && <div className="absolute right-24 top-[58px] z-40 w-64 rounded-xl border border-line-strong bg-surface p-3 shadow-2xl">
+        <div className="mb-2 flex items-center justify-between"><p className="text-xs font-bold text-soft">Workspace layout</p><button onClick={() => setLayoutMenu(false)} aria-label="Close layout menu" className="text-muted hover:text-text">×</button></div>
+        <div className="space-y-1 text-xs">
+          <LayoutToggle label="Navigation" checked={!navCollapsed} onChange={() => setNavCollapsed((v) => !v)} />
+          <LayoutToggle label="Media bin" checked={!mediaCollapsed} onChange={() => setMediaCollapsed((v) => !v)} />
+          <LayoutToggle label="Inspector / AI" checked={!inspectorCollapsed} onChange={() => setInspectorCollapsed((v) => !v)} />
+          <LayoutToggle label="Timeline" checked={timelineVisible} onChange={() => setTimelineVisible((v) => !v)} />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => { setNavCollapsed(true); setMediaCollapsed(true); setInspectorCollapsed(true); setLayoutMenu(false); }} className="rounded-md border border-line px-2 py-1.5 text-[10px] font-semibold text-soft hover:border-accent/50">Focus preview</button><button onClick={() => { setNavCollapsed(false); setMediaCollapsed(false); setInspectorCollapsed(false); setTimelineVisible(true); setNavWidth(190); setMediaWidth(280); setInspectorWidth(350); setLayoutMenu(false); }} className="rounded-md border border-line px-2 py-1.5 text-[10px] font-semibold text-soft hover:border-accent/50">Reset layout</button></div>
+        <p className="mt-2 text-[9px] leading-relaxed text-faint">Drag panel edges to resize. Layout is saved on this device.</p>
+      </div>}
+      <div className="hidden min-h-0 flex-1 bg-bg-deep xl:grid" style={{ gridTemplateColumns: `${navCollapsed ? 54 : navWidth}px 6px ${mediaCollapsed ? 38 : `${mediaWidth}px`} 6px minmax(240px, 1fr) 6px ${inspectorCollapsed ? 38 : `${inspectorWidth}px`}` }}>
+        <EditorNavigation collapsed={navCollapsed} onToggleCollapse={() => setNavCollapsed((v) => !v)} activeTool={activeTool} onSelect={(tool) => {
           setActiveTool(tool);
           if (tool === "AI Assistant") setWorkspace("cine");
           if (tool === "Media") { setBinTab("media"); setWorkspace("edit"); }
@@ -182,11 +212,12 @@ function Shell() {
           if (tool === "Effects") setWorkspace("effects");
           if (tool === "Color") setWorkspace("color");
         }} />
-        <div className="min-h-0 overflow-hidden border-y border-r border-line bg-surface"><MediaLibrary key={binTab} initialTab={binTab} /></div>
+        <PanelResizeHandle label="Resize navigation width" onPointerDown={(e) => startPanelResize("nav", e)} />
+        {mediaCollapsed ? <button type="button" onClick={() => setMediaCollapsed(false)} title="Expand media bin" aria-label="Expand media bin" className="grid min-h-0 place-items-center border-y border-line bg-surface text-[10px] font-semibold text-muted [writing-mode:vertical-rl] hover:bg-accent/10 hover:text-accent">MEDIA ＋</button> : <div className="min-h-0 overflow-hidden border-y border-r border-line bg-surface"><MediaLibrary key={binTab} initialTab={binTab} onCollapse={() => setMediaCollapsed(true)} /></div>}
         <PanelResizeHandle label="Resize media panel" onPointerDown={(e) => startPanelResize("media", e)} />
         <div className="min-h-0 overflow-hidden border-y border-line bg-bg"><Preview onOpenMedia={() => setSmallScreenTab("media")} /></div>
         <PanelResizeHandle label="Resize inspector panel" onPointerDown={(e) => startPanelResize("inspector", e)} />
-        <div className="min-h-0 overflow-hidden border-y border-l border-line bg-surface"><SidePanel key={workspace} initialTab={workspace} /></div>
+        {inspectorCollapsed ? <button type="button" onClick={() => setInspectorCollapsed(false)} title="Expand inspector and AI panel" aria-label="Expand inspector and AI panel" className="grid min-h-0 place-items-center border-y border-l border-line bg-surface text-[10px] font-semibold text-muted [writing-mode:vertical-rl] hover:bg-accent/10 hover:text-accent">INSPECTOR ＋</button> : <div className="min-h-0 overflow-hidden border-y border-l border-line bg-surface"><SidePanel key={workspace} initialTab={workspace} onCollapse={() => setInspectorCollapsed(true)} /></div>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col xl:hidden">
         <nav aria-label="Editor workspace" className="grid h-11 shrink-0 grid-cols-4 border-b border-line bg-surface px-2">
@@ -201,7 +232,7 @@ function Shell() {
           {smallScreenTab === "media" ? <MediaLibrary /> : smallScreenTab === "cine" ? <SidePanel initialTab="cine" /> : smallScreenTab === "inspector" ? <SidePanel initialTab="edit" /> : <Preview onOpenMedia={() => setSmallScreenTab("media")} />}
         </div>
       </div>
-      <div className="flex min-h-0 shrink-0 flex-col" style={{ height: timelineHeight, maxHeight: "55dvh" }}>
+      {timelineVisible && <div className="flex min-h-0 shrink-0 flex-col" style={{ height: timelineHeight, maxHeight: "55dvh" }}>
         <button
           type="button"
           aria-label="Resize timeline height"
@@ -215,7 +246,7 @@ function Shell() {
           <span className="h-1 w-12 rounded-full bg-muted/50 transition group-hover:w-20 group-hover:bg-accent" />
         </button>
         <Timeline />
-      </div>
+      </div>}
       <StatusBar />
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
@@ -239,30 +270,37 @@ function PanelResizeHandle({ label, onPointerDown }: { label: string; onPointerD
   return <button type="button" aria-label={label} title={label} onPointerDown={onPointerDown} className="group relative z-10 hidden w-1.5 cursor-col-resize touch-none border-x border-line bg-bg-deep transition hover:border-accent/50 hover:bg-accent/15 xl:block"><span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-line-strong transition group-hover:bg-accent" /></button>;
 }
 
-function EditorNavigation({ activeTool, onSelect }: { activeTool: string; onSelect: (tool: string) => void }) {
+function LayoutToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
+  return <button type="button" role="switch" aria-checked={checked} onClick={onChange} className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-soft hover:bg-white/5"><span>{label}</span><span className={`relative h-4 w-7 rounded-full transition ${checked ? "bg-accent" : "bg-surface-3"}`}><span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${checked ? "left-3.5" : "left-0.5"}`} /></span></button>;
+}
+
+function EditorNavigation({ activeTool, onSelect, collapsed, onToggleCollapse }: { activeTool: string; onSelect: (tool: string) => void; collapsed: boolean; onToggleCollapse: () => void }) {
   const tools = [[Sparkle, "AI Assistant"], [Folder, "Assets"], [TextIcon, "Text & Titles"], [Film, "Effects"], [Film, "Transitions"], [Sparkle, "Color"], [Music, "Audio"]] as const;
   return (
-    <nav aria-label="Editor tools" className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface px-2.5 py-3 shadow-panel">
-      <Link href="/" className="mb-4 flex items-center gap-2 px-1.5" aria-label="CineMind home">
-        <LogoMark size={30} />
-        <span><span className="block text-[13px] font-bold leading-tight">CineMind <span className="text-accent">AI</span></span><span className="text-[9px] tracking-wide text-muted">CREATIVE STUDIO</span></span>
-      </Link>
-      <p className="mb-1.5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Workspace</p>
+    <nav aria-label="Editor tools" className={`flex min-h-0 flex-col overflow-hidden border-y border-l border-line bg-surface py-3 ${collapsed ? "items-center px-1" : "px-2.5"}`}>
+      <div className={`mb-4 flex w-full items-center ${collapsed ? "flex-col gap-2" : "justify-between gap-1 px-1"}`}>
+        <Link href="/" className="flex min-w-0 items-center gap-2" aria-label="CineMind home">
+          <LogoMark size={collapsed ? 28 : 30} />
+          {!collapsed && <span><span className="block text-[13px] font-bold leading-tight">CineMind <span className="text-accent">AI</span></span><span className="text-[9px] tracking-wide text-muted">CREATIVE STUDIO</span></span>}
+        </Link>
+        <button type="button" onClick={onToggleCollapse} title={collapsed ? "Expand navigation" : "Collapse navigation"} aria-label={collapsed ? "Expand navigation" : "Collapse navigation"} className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-accent/10 hover:text-accent">{collapsed ? "›" : "‹"}</button>
+      </div>
+      {!collapsed && <p className="mb-1.5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Workspace</p>}
       <div className="space-y-1">
-        <NavLink href="/" label="Home"><span aria-hidden="true">⌂</span></NavLink>
-        <NavLink href="/editor" label="Edit" active><Film size={16} /></NavLink>
-        <NavLink href="/projects" label="Projects"><span aria-hidden="true">▤</span></NavLink>
+        <NavLink href="/" label={collapsed ? "" : "Home"}><span aria-hidden="true">⌂</span></NavLink>
+        <NavLink href="/editor" label={collapsed ? "" : "Edit"} active><Film size={16} /></NavLink>
+        <NavLink href="/projects" label={collapsed ? "" : "Projects"}><span aria-hidden="true">▤</span></NavLink>
       </div>
-      <p className="mb-1.5 mt-5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Tools</p>
-      <div className="thin-scroll min-h-0 space-y-1 overflow-y-auto">
-        <button type="button" onClick={() => onSelect("Media")} className={`flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${activeTool === "Media" ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><Film size={16} /><span>Media</span></button>
-        {tools.map(([Icon, label]) => <button key={label} type="button" onClick={() => onSelect(label)} className={`flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${activeTool === label ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><Icon size={16} /><span className="truncate">{label}</span></button>)}
+      {!collapsed && <p className="mb-1.5 mt-5 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-faint">Tools</p>}
+      <div className={`thin-scroll min-h-0 space-y-1 overflow-y-auto ${collapsed ? "mt-3 w-full" : ""}`}>
+        <button type="button" title="Media" aria-label="Media" onClick={() => onSelect("Media")} className={`flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${collapsed ? "justify-center px-0" : ""} ${activeTool === "Media" ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><Film size={16} />{!collapsed && <span>Media</span>}</button>
+        {tools.map(([Icon, label]) => <button key={label} type="button" title={label} aria-label={label} onClick={() => onSelect(label)} className={`flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-left text-[11px] font-medium transition ${collapsed ? "justify-center px-0" : ""} ${activeTool === label ? "bg-accent/15 text-accent" : "text-muted hover:bg-white/[0.055] hover:text-text"}`}><Icon size={16} />{!collapsed && <span className="truncate">{label}</span>}</button>)}
       </div>
-      <div className="mt-3 rounded-xl border border-accent/20 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.20),rgba(17,18,32,0.6)_72%)] p-3 text-center">
+      {!collapsed && <div className="mt-3 rounded-xl border border-accent/20 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.20),rgba(17,18,32,0.6)_72%)] p-3 text-center">
         <span className="mx-auto grid h-8 w-8 place-items-center rounded-xl bg-accent/15 text-accent"><Music size={16} /></span>
         <p className="mt-2 text-[11px] font-semibold text-soft">Cine AI copilot</p>
         <p className="mt-1 text-[9px] leading-relaxed text-muted">Your creative partner, on every cut.</p>
-      </div>
+      </div>}
     </nav>
   );
 }
@@ -271,7 +309,7 @@ function NavLink({ href, label, children, active = false }: { href: string; labe
   return <Link href={href} aria-current={active ? "page" : undefined} title={label} className={`flex h-9 items-center justify-start gap-3 rounded-lg px-2.5 text-[11px] font-semibold transition-colors ${active ? "border border-accent/25 bg-gradient-to-r from-accent/20 to-accent/5 text-text shadow-[inset_2px_0_0_var(--accent)]" : "text-muted hover:bg-white/5 hover:text-text"}`}><span className={`grid w-4 place-items-center text-base ${active ? "text-accent" : "text-soft"}`}>{children}</span><span>{label}</span></Link>;
 }
 
-function TopBar({ onExport, onAI, theme, onToggleTheme }: { onExport: () => void; onAI: () => void; theme: "dark" | "light"; onToggleTheme: () => void }) {
+function TopBar({ onExport, onAI, theme, onToggleTheme, onLayout }: { onExport: () => void; onAI: () => void; theme: "dark" | "light"; onToggleTheme: () => void; onLayout: () => void }) {
   const { title, undo, redo, canUndo, canRedo, doc, saving, projectId } = useEditor();
   return (
     <header className="relative flex h-[54px] shrink-0 items-center gap-2 border-b border-line bg-surface px-2 sm:gap-4 sm:px-4">
@@ -302,6 +340,7 @@ function TopBar({ onExport, onAI, theme, onToggleTheme }: { onExport: () => void
       </div>
       <span className="ml-auto" />
       <span className="hidden text-[12px] text-faint 2xl:inline">Space play · S split · ? shortcuts</span>
+      <button onClick={onLayout} aria-label="Workspace layout controls" title="Show, hide, resize or reset editor panels" className="grid h-8 min-w-8 place-items-center rounded-lg border border-line px-2 text-[10px] font-semibold text-soft hover:border-accent/50 hover:text-accent">Panels</button>
       <button onClick={onToggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} className="grid h-8 w-8 place-items-center rounded-lg border border-line text-soft hover:border-accent/50 hover:text-accent">{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
       {!projectId && (
         <Link href="/signup" className="hidden rounded-full border border-line-strong px-3 py-1 text-[12px] text-soft hover:border-accent/60 hover:text-text sm:inline-flex">

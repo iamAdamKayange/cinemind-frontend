@@ -21,7 +21,7 @@ const STATUS: Record<string, string> = {
   failed: "Failed",
 };
 
-export function MediaLibrary({ initialTab = "media" }: { initialTab?: Tab }) {
+export function MediaLibrary({ initialTab = "media", onCollapse }: { initialTab?: Tab; onCollapse?: () => void }) {
   const { assets, importFiles, doc, run, playhead, projectId, relink, selectedId, select, notify } = useEditor();
   const relinkRef = useRef<HTMLInputElement>(null);
   const [relinkId, setRelinkId] = useState<string | null>(null);
@@ -106,7 +106,7 @@ export function MediaLibrary({ initialTab = "media" }: { initialTab?: Tab }) {
     >
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-3 text-[12px]">
         <span className="font-semibold text-soft">Project bin</span>
-        <span className="text-faint">{tab === "text" ? doc.tracks.filter((t) => t.kind === "text").reduce((n, t) => n + t.clips.length, 0) : assets.length} items</span>
+        <div className="flex items-center gap-2"><span className="text-faint">{tab === "text" ? doc.tracks.filter((t) => t.kind === "text").reduce((n, t) => n + t.clips.length, 0) : assets.length} items</span>{onCollapse && <button type="button" onClick={onCollapse} title="Collapse media bin" aria-label="Collapse media bin" className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-accent/10 hover:text-accent">−</button>}</div>
       </div>
       <div className="grid shrink-0 grid-cols-5 gap-1 border-b border-line p-1.5">
         {([ ["media", "Media"], ["audio", "Audio"], ["text", "Text"], ["elements", "Effects"], ["stock", "Stock"] ] as const).map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-md py-2 text-[10px] font-semibold transition ${tab === id ? "bg-accent/10 text-accent" : "text-muted hover:bg-white/5 hover:text-text"}`}>{label}</button>)}

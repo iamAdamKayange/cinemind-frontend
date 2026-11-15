@@ -126,6 +126,14 @@ const LOOKS: [NonNullable<ClipEffects["look"]>, string][] = [
   ["vintage", "Vintage"],
   ["bw", "B&W"],
 ];
+const LOOK_SWATCHES: Record<NonNullable<ClipEffects["look"]>, string> = {
+  none: "linear-gradient(115deg,#25364c 0%,#718a9c 43%,#d8a878 72%,#f2d9ae 100%)",
+  cinematic: "linear-gradient(115deg,#101c35 0%,#285875 43%,#d37b48 76%,#ffd08a 100%)",
+  warm: "linear-gradient(115deg,#3f2527 0%,#9d5140 43%,#e99c4d 75%,#ffd68a 100%)",
+  cool: "linear-gradient(115deg,#17283e 0%,#267b9b 45%,#78c8d3 78%,#d7edf2 100%)",
+  vintage: "linear-gradient(115deg,#3f3428 0%,#887052 44%,#c9a77b 76%,#e6d0a4 100%)",
+  bw: "linear-gradient(115deg,#111 0%,#454545 42%,#aaa 76%,#eee 100%)",
+};
 
 export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: "all" | "effects" | "color" }) {
   const { doc, run } = useEditor();
@@ -142,7 +150,7 @@ export function EffectsGroup({ clipId, mode = "all" }: { clipId: string; mode?: 
             onClick={() => set({ look: k })}
             className={`overflow-hidden rounded-[8px] border text-[11px] font-semibold ${(fx.look ?? "none") === k ? "border-accent text-text" : "border-line text-muted hover:border-line-strong"}`}
           >
-            <span className="block h-7 bg-[linear-gradient(120deg,#e9a25a,#1eb53a_45%,#00a3dd)]" style={{ filter: cssLook(k) }} />
+            <span className="block h-7" style={{ background: LOOK_SWATCHES[k], filter: cssLook(k) }} />
             <span className="block py-1">{l}</span>
           </button>
         ))}

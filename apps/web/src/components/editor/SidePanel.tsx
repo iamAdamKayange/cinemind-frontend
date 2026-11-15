@@ -49,7 +49,7 @@ let seq = 0;
 
 type PanelTab = "edit" | "effects" | "color" | "audio" | "cine" | "history";
 
-export function SidePanel({ initialTab = "edit" }: { initialTab?: PanelTab }) {
+export function SidePanel({ initialTab = "edit", onCollapse }: { initialTab?: PanelTab; onCollapse?: () => void }) {
   const [tab, setTab] = useState<PanelTab>(initialTab);
   const { projectId } = useEditor();
 
@@ -62,6 +62,7 @@ export function SidePanel({ initialTab = "edit" }: { initialTab?: PanelTab }) {
             {tab === t && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" />}
           </button>
         ))}
+        {onCollapse && <button type="button" onClick={onCollapse} title="Collapse inspector and AI panel" aria-label="Collapse inspector and AI panel" className="sticky right-0 ml-auto grid h-8 w-7 shrink-0 place-items-center self-center rounded bg-surface text-lg text-muted hover:bg-accent/10 hover:text-accent">−</button>}
       </div>
       {tab === "cine" ? <Copilot /> : tab === "history" ? <VersionHistory /> : tab === "edit" || tab === "effects" || tab === "color" || tab === "audio" ? <Inspector section={tab} /> : null}
     </aside>
