@@ -310,7 +310,7 @@ function NavLink({ href, label, children, active = false }: { href: string; labe
 }
 
 function TopBar({ onExport, onAI, theme, onToggleTheme, onLayout }: { onExport: () => void; onAI: () => void; theme: "dark" | "light"; onToggleTheme: () => void; onLayout: () => void }) {
-  const { title, undo, redo, canUndo, canRedo, doc, saving, projectId } = useEditor();
+  const { title, undo, redo, canUndo, canRedo, doc, saving, projectId, mediaStorageMode } = useEditor();
   return (
     <header className="relative flex h-[54px] shrink-0 items-center gap-2 border-b border-line bg-surface px-2 sm:gap-4 sm:px-4">
       <div className="tz-stripe absolute inset-x-0 top-0 h-[2px]" />
@@ -320,7 +320,7 @@ function TopBar({ onExport, onAI, theme, onToggleTheme, onLayout }: { onExport: 
       <span className="h-5 w-px bg-line" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14px] font-semibold leading-tight">{title}</p>
-        <p className="text-[11px] leading-tight text-faint">{!projectId ? "Local draft · not synced" : saving ? "Syncing edit…" : `Edit synced · media local · v${doc.version}`}</p>
+        <p className="text-[11px] leading-tight text-faint">{!projectId ? "Local draft · not synced" : saving ? "Syncing edit…" : mediaStorageMode === "server" ? `Edit synced · server media · v${doc.version}` : mediaStorageMode === "device" ? `Edit synced · device media · v${doc.version}` : "Connected · checking media storage…"}</p>
       </div>
       <nav aria-label="Studio navigation" className="hidden h-full items-center gap-1 xl:flex">
         <Link href="/" className="rounded-lg px-3 py-2 text-[11px] font-semibold text-muted transition hover:bg-white/5 hover:text-text">Home</Link>
@@ -355,12 +355,12 @@ function TopBar({ onExport, onAI, theme, onToggleTheme, onLayout }: { onExport: 
 }
 
 function StatusBar() {
-  const { doc, assets, duration, projectId } = useEditor();
+  const { doc, assets, duration, projectId, mediaStorageMode } = useEditor();
   const clips = doc.tracks.reduce((n, t) => n + t.clips.length, 0);
   return (
     <footer className="flex h-6 shrink-0 items-center gap-5 border-t border-line bg-surface px-4 text-[11px] text-faint">
       <span className="flex items-center gap-1.5">
-        <span className={`h-1.5 w-1.5 rounded-full ${projectId ? "bg-ok" : "bg-sun"}`} /> <span className="hidden sm:inline">{projectId ? "Connected · media stays on device" : "Local draft · media stays on device"}</span><span className="sm:hidden">{projectId ? "Local media" : "Local draft"}</span>
+        <span className={`h-1.5 w-1.5 rounded-full ${projectId ? "bg-ok" : "bg-sun"}`} /> <span className="hidden sm:inline">{!projectId ? "Local draft · media stays on device" : mediaStorageMode === "server" ? "Connected · media on CineMind server" : mediaStorageMode === "device" ? "Connected · media stays on this device" : "Connected · storage status unavailable"}</span><span className="sm:hidden">{projectId ? mediaStorageMode === "server" ? "Server media" : mediaStorageMode === "device" ? "Local media" : "Storage unknown" : "Local draft"}</span>
       </span>
       <span>
         {clips} clips · {assets.length} media
@@ -379,7 +379,7 @@ const PRESETS = [
   { id: "draft", name: "Quick draft", spec: "960×540 · fastest" },
 ];
 function ExportDialog({ onClose }: { onClose: () => void }) {
-  const { doc, title, projectId, assetById, getLocalFile, notify } = useEditor();
+  const { doc, title, projectId, assetById, getLocalFile, notify, mediaStorageMode } = useEditor();
   const [preset, setPreset] = useState(PRESETS[0].id);
   const [state, setState] = useState<{ pct: number; stage: string } | null>(null);
   const [result, setResult] = useState<{ url: string; name: string; size?: number } | null>(null);
@@ -434,7 +434,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
             <h2 className="font-display text-[18px] font-semibold tracking-[-0.01em]">Export</h2>
-            <p className="text-[12px] text-muted">Renders version {doc.version} on this device. Your source media never leaves it.</p>
+            <p className="text-[12px] text-muted">Renders version {doc.version} on this device. {mediaStorageMode === "server" ? "Required clips are fetched from your server storage for this render." : "Device-stored source media stays on this device."}</p>
           </div>
           <button aria-label="Close" disabled={!!state} onClick={onClose} className="grid h-8 w-8 place-items-center rounded text-muted hover:bg-white/5 disabled:opacity-30">
             <X size={16} />

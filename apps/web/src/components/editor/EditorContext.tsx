@@ -31,6 +31,7 @@ type RunResult = { ok: true } | { ok: false; errors: ValidationError[] };
 interface EditorState {
   /** Server project id, or null in demo mode. */
   projectId: string | null;
+  mediaStorageMode: "device" | "server" | null;
   title: string;
   loading: boolean;
   loadError: string | null;
@@ -78,6 +79,7 @@ let toastSeq = 0;
 
 export function EditorProvider({ projectId, title: initialTitle, aspect, children }: { projectId: string | null; title: string; aspect: string; children: ReactNode }) {
   const remote = !!projectId;
+  const [mediaStorageMode, setMediaStorageMode] = useState<EditorState["mediaStorageMode"]>(remote ? null : "device");
   const [title, setTitle] = useState(initialTitle);
   const [loading, setLoading] = useState(remote);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -93,6 +95,15 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastEvent, setLastEvent] = useState<EditorState["lastEvent"]>(null);
+
+  useEffect(() => {
+    if (!projectId) { setMediaStorageMode("device"); return; }
+    let active = true;
+    api<{ mode: "device" | "server" }>("GET", `/projects/${projectId}/media/storage`)
+      .then((info) => { if (active) setMediaStorageMode(info.mode); })
+      .catch(() => { if (active) setMediaStorageMode(null); });
+    return () => { active = false; };
+  }, [projectId]);
 
   const doc = current(history);
   const duration = Math.max(sequenceDuration(doc), 10 * FPS);
@@ -330,7 +341,8 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
         const probe = await probeLocal(file);
         const fp = await fingerprint(file);
         setUploads((u) => u.map((x) => (x.id === tempId ? { ...x, progress: 60 } : x)));
-        const storageMode = await api<{ mode: "device" | "server" }>("GET", `/projects/${projectId}/media/storage`).catch(() => ({ mode: "device" as const }));
+        const storageMode = await api<{ mode: "device" | "server" }>("GET", `/projects/${projectId}/media/storage`);
+        setMediaStorageMode(storageMode.mode);
         let a: RemoteAsset;
         if (storageMode.mode === "server" && !assetImportJobId) {
           const form = new FormData();
@@ -476,6 +488,7 @@ export function EditorProvider({ projectId, title: initialTitle, aspect, childre
     relink,
     getLocalFile,
     projectId,
+    mediaStorageMode,
     title,
     loading,
     loadError,

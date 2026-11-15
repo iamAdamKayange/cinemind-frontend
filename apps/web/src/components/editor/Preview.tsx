@@ -1,6 +1,6 @@
 "use client";
 
-import { clipEnd, evaluateTransform, framesToTimecode, type Clip } from "@cinemind/timeline-engine";
+import { clipEnd, evaluateTransform, framesToTimecode, type Clip, type Track } from "@cinemind/timeline-engine";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FrameDialog, framePresetFor } from "./FrameDialog";
 import { CropOverlay } from "./CropOverlay";
@@ -18,7 +18,6 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
   const { doc, playhead, playing, togglePlay, setPlayhead, assetById, duration, loop, setLoop, projectId } = useEditor();
   const [frameOpen, setFrameOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
-  const [playbackError, setPlaybackError] = useState(false);
   const { run, select } = useEditor();
   const preset = framePresetFor(projectId ?? "demo", doc.sequence.width, doc.sequence.height);
   const { width, height } = doc.sequence;
@@ -26,16 +25,12 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
 
   const at = (c: Clip) => playhead >= c.timelineStartFrames && playhead < clipEnd(c);
 
-  // Topmost visible video clip wins (V2 over V1).
-  const videoClip = useMemo(() => {
-    const vTracks = doc.tracks.filter((t) => t.kind === "video" && !t.hidden).sort((a, b) => b.order - a.order);
-    for (const t of vTracks) {
-      const c = t.clips.find(at);
-      if (c) return { clip: c, muted: !!t.muted };
-    }
-    return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, playhead]);
+  // Compose all visible video lanes bottom-to-top, matching the export graph's track order.
+  const videoLayers = useMemo(() => doc.tracks
+    .filter((track) => track.kind === "video" && !track.hidden)
+    .flatMap((track) => track.clips.filter(at).map((clip) => ({ clip, track })))
+    .sort((a, b) => a.track.order - b.track.order), [doc, playhead]);
+  const videoClip = videoLayers.at(-1) ?? null;
 
   const titles = doc.tracks.filter((t) => t.kind === "text" && !t.hidden).flatMap((t) => t.clips.filter(at));
   const audible = doc.tracks
@@ -43,26 +38,9 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
     .flatMap((t) => t.clips.filter(at))
     .filter((c) => c.assetId && assetById.get(c.assetId)?.url);
 
-  const asset = videoClip?.clip.assetId ? assetById.get(videoClip.clip.assetId) : null;
-  const clipFx = videoClip?.clip.fx;
-  const previewEffects = clipFx?.visualEffects?.length ? clipFx.visualEffects.filter((layer) => layer.enabled) : clipFx?.visualPreset && clipFx.visualPreset !== "none" ? [{ id: clipFx.visualPreset, intensity: clipFx.visualIntensity ?? 0.6, enabled: true }] : [];
-  useEffect(() => { setPlaybackError(false); }, [asset?.id, asset?.url]);
-  const tf = videoClip ? evaluateTransform(videoClip.clip, playhead - videoClip.clip.timelineStartFrames) : undefined;
-  const opacity = tf?.opacity ?? 1;
-  const scale = tf?.scaleX ?? 1;
-  // While cropping, show the whole picture (no crop, fit) so the frame can be drawn over it.
-  const crop = cropping ? undefined : tf?.crop;
-  // Crop the source first (object-view-box), then fit or fill the frame — same order as the export.
-  const mediaStyle = {
-    objectFit: tf?.fit === "fill" && !cropping ? "cover" : "contain",
-    ...(previewEffects.some((layer) => layer.id === "pixelate") ? { imageRendering: "pixelated" as const } : {}),
-    ...(crop && crop.left + crop.right + crop.top + crop.bottom > 0
-      ? { objectViewBox: `inset(${crop.top * 100}% ${crop.right * 100}% ${crop.bottom * 100}% ${crop.left * 100}%)` }
-      : {}),
-  } as React.CSSProperties;
-  const wrapperTransform = cropping ? "none" : `translate(${((tf?.x ?? 0) / width) * 100}%, ${((tf?.y ?? 0) / height) * 100}%) scale(${scale})`;
-  const srcAspect = asset?.width && asset?.height ? asset.width / asset.height : 16 / 9;
-
+  const cropAsset = videoClip?.clip.assetId ? assetById.get(videoClip.clip.assetId) : null;
+  const cropTf = videoClip ? evaluateTransform(videoClip.clip, playhead - videoClip.clip.timelineStartFrames) : undefined;
+  const srcAspect = cropAsset?.width && cropAsset?.height ? cropAsset.width / cropAsset.height : 16 / 9;
   // Fade-through-black for transitions around the playhead.
   const transitionDim = useMemo(() => {
     for (const tr of doc.transitions) {
@@ -84,23 +62,7 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
           className="relative max-h-full max-w-full overflow-hidden bg-black shadow-2xl ring-1 ring-white/10"
           style={{ aspectRatio: `${width} / ${height}`, height: width >= height ? undefined : "100%", width: width >= height ? "100%" : undefined }}
         >
-          <div className="absolute inset-0" style={{ opacity, transform: wrapperTransform, filter: cssFx(videoClip?.clip.fx) || undefined, boxShadow: videoClip?.clip.fx?.vignette ? `inset 0 0 ${Math.round(140 * videoClip.clip.fx.vignette)}px rgba(0,0,0,${0.8 * videoClip.clip.fx.vignette})` : undefined }}>
-            {videoClip && asset?.url && asset.kind === "video" && !playbackError && (
-              <SyncedMedia kind="video" src={asset.url} clip={videoClip.clip} playhead={playhead} playing={playing} muted={videoClip.muted} mediaStyle={mediaStyle} onError={() => setPlaybackError(true)} />
-            )}
-            {videoClip && asset?.url && asset.kind === "image" && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={asset.url} alt="" className="h-full w-full" style={mediaStyle} />
-            )}
-            {videoClip && !asset?.url && asset?.photo && <Photo photo={asset.photo} sizes="60vw" className="scale-105" />}
-          </div>
-          {previewEffects.filter((layer) => layer.id === "film-grain").map((layer, i) => <div key={`grain-${i}`} aria-hidden="true" className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ opacity: layer.intensity * 0.48, backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E\")", backgroundSize: "180px 180px" }} />)}
-          {previewEffects.filter((layer) => layer.id === "vhs").map((layer, i) => <div key={`vhs-${i}`} aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ opacity: layer.intensity * 0.55, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.55) 4px, transparent 5px)" }} />)}
-          {videoClip && (playbackError || (asset && !asset.url && !asset.photo) || !asset) && <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#090a11]/95 px-5 text-center">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-sun/25 bg-sun/10 text-sun"><Film size={19} /></span>
-            <p className="text-[13px] font-semibold text-text">{playbackError ? "This video could not be decoded" : "The original media is offline"}</p>
-            <p className="max-w-[280px] text-[11px] leading-relaxed text-muted">{playbackError ? "Try relinking a supported MP4 (H.264) file." : "Media is stored on the device that imported it. In the Media bin, choose Relink file and select the original."}</p>
-          </div>}
+          {videoLayers.map((layer) => <PreviewVideoLayer key={layer.clip.id} clip={layer.clip} track={layer.track} playhead={playhead} playing={playing} width={width} height={height} cropping={cropping && layer.clip.id === videoClip?.clip.id} />)}
           {!videoClip && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-5 text-center">
             <span className="grid h-12 w-12 place-items-center rounded-2xl border border-accent/20 bg-accent/10 text-accent"><Film size={22} /></span>
             <div><p className="text-[14px] font-semibold text-text">{sequenceHasVideo ? "No clip at this playhead" : "Start with your footage"}</p><p className="mt-1 max-w-[260px] text-[11px] leading-relaxed text-muted">Import a video, music or image. Add it to the timeline, then select a clip to reveal its editing controls.</p></div>
@@ -110,7 +72,7 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
             <CropOverlay
               srcAspect={srcAspect}
               boxAspect={width / height}
-              initial={{ left: 0, right: 0, top: 0, bottom: 0, ...tf?.crop }}
+              initial={{ left: 0, right: 0, top: 0, bottom: 0, ...cropTf?.crop }}
               onCancel={() => setCropping(false)}
               onDone={(c) => {
                 run([{ type: "clip.setTransform", clipId: videoClip.clip.id, transform: { crop: c } }], "Crop applied");
@@ -185,6 +147,37 @@ export function Preview({ onOpenMedia }: { onOpenMedia?: () => void }) {
       </div>
     </section>
   );
+}
+
+function PreviewVideoLayer({ clip, track, playhead, playing, width, height, cropping }: { clip: Clip; track: Track; playhead: number; playing: boolean; width: number; height: number; cropping: boolean }) {
+  const { assetById } = useEditor();
+  const [playbackError, setPlaybackError] = useState(false);
+  const asset = clip.assetId ? assetById.get(clip.assetId) : null;
+  const effects = clip.fx?.visualEffects?.length
+    ? clip.fx.visualEffects.filter((layer) => layer.enabled)
+    : clip.fx?.visualPreset && clip.fx.visualPreset !== "none"
+      ? [{ id: clip.fx.visualPreset, intensity: clip.fx.visualIntensity ?? 0.6, enabled: true }]
+      : [];
+  const tf = evaluateTransform(clip, playhead - clip.timelineStartFrames);
+  const crop = cropping ? undefined : tf.crop;
+  const mediaStyle = {
+    objectFit: tf.fit === "fill" && !cropping ? "cover" : "contain",
+    ...(effects.some((effect) => effect.id === "pixelate") ? { imageRendering: "pixelated" as const } : {}),
+    ...(crop && crop.left + crop.right + crop.top + crop.bottom > 0
+      ? { objectViewBox: `inset(${crop.top * 100}% ${crop.right * 100}% ${crop.bottom * 100}% ${crop.left * 100}%)` }
+      : {}),
+  } as React.CSSProperties;
+  const transform = cropping ? "none" : `translate(${(tf.x / width) * 100}%, ${(tf.y / height) * 100}%) scale(${tf.scaleX}, ${tf.scaleY})`;
+  useEffect(() => setPlaybackError(false), [asset?.id, asset?.url]);
+
+  return <div className="absolute inset-0" style={{ opacity: tf.opacity, transform, filter: cssFx(clip.fx) || undefined, boxShadow: clip.fx?.vignette ? `inset 0 0 ${Math.round(140 * clip.fx.vignette)}px rgba(0,0,0,${0.8 * clip.fx.vignette})` : undefined }}>
+    {asset?.url && asset.kind === "video" && !playbackError && <SyncedMedia kind="video" src={asset.url} clip={clip} playhead={playhead} playing={playing} muted={!!track.muted} mediaStyle={mediaStyle} onError={() => setPlaybackError(true)} />}
+    {asset?.url && asset.kind === "image" && <img src={asset.url} alt="" className="h-full w-full" style={mediaStyle} />}
+    {!asset?.url && asset?.photo && <Photo photo={asset.photo} sizes="60vw" className="scale-105" />}
+    {effects.filter((layer) => layer.id === "film-grain").map((layer, i) => <div key={`grain-${i}`} aria-hidden="true" className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ opacity: layer.intensity * 0.48, backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E\")", backgroundSize: "180px 180px" }} />)}
+    {effects.filter((layer) => layer.id === "vhs").map((layer, i) => <div key={`vhs-${i}`} aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ opacity: layer.intensity * 0.55, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0 3px, rgba(0,0,0,.55) 4px, transparent 5px)" }} />)}
+    {(!asset || (!asset.url && !asset.photo) || playbackError) && <div role="status" className="absolute left-2 top-2 rounded-md border border-sun/30 bg-black/75 px-2 py-1 text-[10px] text-sun">{playbackError ? "Could not decode media" : "Media offline · relink source"}</div>}
+  </div>;
 }
 
 function SyncedMedia({ kind, src, clip, playhead, playing, muted, mediaStyle, onError }: { kind: "video" | "audio"; src: string; clip: Clip; playhead: number; playing: boolean; muted: boolean; mediaStyle?: React.CSSProperties; onError?: () => void }) {

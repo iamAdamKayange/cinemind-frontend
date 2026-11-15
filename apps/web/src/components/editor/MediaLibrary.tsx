@@ -30,14 +30,15 @@ export function MediaLibrary({ initialTab = "media", onCollapse }: { initialTab?
   const [over, setOver] = useState(false);
   const [recording, setRecording] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ mode: "device" | "server"; userUsedBytes: number; userQuotaBytes: number } | null>(null);
+  const [storageError, setStorageError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!projectId) return;
     let active = true;
     api<{ mode: "device" | "server"; userUsedBytes?: number; userQuotaBytes?: number }>("GET", `/projects/${projectId}/media/storage`)
-      .then((info) => { if (active) setStorageInfo({ mode: info.mode, userUsedBytes: info.userUsedBytes ?? 0, userQuotaBytes: info.userQuotaBytes ?? 0 }); })
-      .catch(() => { if (active) setStorageInfo({ mode: "device", userUsedBytes: 0, userQuotaBytes: 0 }); });
+      .then((info) => { if (active) { setStorageInfo({ mode: info.mode, userUsedBytes: info.userUsedBytes ?? 0, userQuotaBytes: info.userQuotaBytes ?? 0 }); setStorageError(false); } })
+      .catch(() => { if (active) { setStorageInfo(null); setStorageError(true); } });
     return () => { active = false; };
   }, [projectId, assets.length]);
 
@@ -112,6 +113,7 @@ export function MediaLibrary({ initialTab = "media", onCollapse }: { initialTab?
         {([ ["media", "Media"], ["audio", "Audio"], ["text", "Text"], ["elements", "Effects"], ["stock", "Stock"] ] as const).map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-md py-2 text-[10px] font-semibold transition ${tab === id ? "bg-accent/10 text-accent" : "text-muted hover:bg-white/5 hover:text-text"}`}>{label}</button>)}
       </div>
       <div className="space-y-3 p-3">
+        {storageError && projectId && (tab === "media" || tab === "audio") && <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-2.5 text-[10px] leading-relaxed text-[#ffb3a8]">CineMind could not verify where this project stores media. Upload is paused so files are not silently saved to the wrong place. Reload the project and try again.</div>}
         {storageInfo?.mode === "server" && storageInfo.userQuotaBytes > 0 && (tab === "media" || tab === "audio") && <div className="rounded-lg border border-line bg-bg-deep/70 px-2.5 py-2" aria-label="Project media storage usage">
           <div className="flex items-center justify-between gap-2 text-[10px]"><span className="font-semibold text-soft">Account storage</span><span className="text-faint">{(storageInfo.userUsedBytes / 1e9).toFixed(1)} / {(storageInfo.userQuotaBytes / 1e9).toFixed(0)} GB</span></div>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${Math.min(100, (storageInfo.userUsedBytes / storageInfo.userQuotaBytes) * 100)}%` }} /></div>
@@ -204,7 +206,7 @@ export function MediaLibrary({ initialTab = "media", onCollapse }: { initialTab?
         {tab === "stock" && <StockAssetBrowser />}
         <p className="mt-4 text-[11px] leading-relaxed text-faint">
           {(tab === "media" || tab === "audio") && (projectId
-            ? "Original media stays on this device. Only your edit and lightweight analysis sync. Re-link media on another device. Keep original files backed up; clearing this browser's site data can remove local copies."
+            ? storageError ? "Media storage could not be confirmed." : !storageInfo ? "Checking this project's media storage…" : storageInfo.mode === "server" ? "Project media is stored on CineMind server storage. Export fetches the required media to this device for rendering." : "Original media stays on this device. Only your edit and lightweight analysis sync. Re-link media on another device, and keep a backup of original files."
             : "Demo mode: imported files stay on this device. Sign in to sync your edit; media itself remains local. Keep original files backed up.")}
         </p>
       </div>
